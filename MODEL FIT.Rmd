@@ -1,0 +1,1050 @@
+---
+title: "data analyze"
+author: "Dinithi Gunarathna"
+date: "2025-21-18"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(readr)
+train <- read_csv("train_RFIMPUTED.csv")
+test <- read_csv("test_RFIMPUTED.csv")
+ 
+```
+
+```{r}
+train$bedrooms <- as.factor(train$bedrooms)
+train$bathrooms <- as.factor(train$bathrooms)
+train$floors <- as.factor(train$floors)
+train$waterfront <- as.factor(train$waterfront)
+train$view <- as.factor(train$view)
+train$condition <- as.factor(train$condition)
+train$city <- as.factor(train$city)
+train$monthHS <- as.factor(train$monthHS)
+train$dayHS <- as.factor(train$dayHS)
+train$sqft_basement_Categorized <- as.factor(train$sqft_basement_Categorized)
+train$statezip <- as.factor(train$statezip)
+```
+
+```{r}
+test$bedrooms <- as.factor(test$bedrooms)
+test$bathrooms <- as.factor(test$bathrooms)
+test$floors <- as.factor(test$floors)
+test$waterfront <- as.factor(test$waterfront)
+test$view <- as.factor(test$view)
+test$condition <- as.factor(test$condition)
+test$city <- as.factor(test$city)
+test$monthHS <- as.factor(test$monthHS)
+test$dayHS <- as.factor(test$dayHS)
+test$sqft_basement_Categorized <- as.factor(test$sqft_basement_Categorized)
+test$statezip <- as.factor(test$statezip)
+```
+
+```{r}
+# Factorize categorical variables
+categorical_vars <- c("bedrooms", "bathrooms", "floors", "waterfront", 
+                      "view", "condition", "city", "monthHS", "dayHS",
+                      "sqft_basement_Categorized", "statezip")
+
+train[categorical_vars] <- lapply(train[categorical_vars], as.factor)
+test[categorical_vars] <- lapply(test[categorical_vars], as.factor)
+
+# Specify continuous variables
+continuous_vars <- c("sqft_living", "sqft_lot", "price", "sqft_above", "sqft_basement")
+
+```
+
+### 1.4.2 CHECK FOR MULTICOLLINEARITY
+
+### 1.4.2.1 CHECK FOR MULTICOLLINEARITY IN CATEGORICAL DATA USING CRAMER'S V
+```{r}
+
+library(vcd)
+library(ggplot2)
+library(reshape2)
+
+# List of categorical variables (adjust with your own list)
+categorical_vars <- c("bedrooms", "bathrooms", "floors", "waterfront", 
+                      "view", "condition", "statezip", 
+                      "monthHS", "dayHS","city", "sqft_basement_Categorized")
+
+# Create an empty matrix to store pairwise Cramér's V values
+cramer_matrix <- matrix(NA, nrow = length(categorical_vars), ncol = length(categorical_vars))
+colnames(cramer_matrix) <- rownames(cramer_matrix) <- categorical_vars
+
+# Calculate pairwise Cramér's V
+for (i in 1:length(categorical_vars)) {
+  for (j in 1:length(categorical_vars)) {
+    if (i != j) {
+      # Create the contingency table for the pair
+      ct <- table(train[[categorical_vars[i]]], train[[categorical_vars[j]]])
+      # Calculate Cramér's V
+      cramer_matrix[i, j] <- assocstats(ct)$cramer
+    } else {
+      cramer_matrix[i, j] <- 1  # Cramér's V with itself is 1
+    }
+  }
+}
+
+# Convert the matrix into a data frame for ggplot
+cramer_df <- melt(cramer_matrix)
+
+# Plot a heatmap
+ggplot(cramer_df, aes(x = Var1, y = Var2, fill = value)) +
+  geom_tile() +
+  scale_fill_gradient(low = "white", high = "blue") +
+  theme_minimal() +
+  labs(title = "Pairwise Cramér's V Heatmap for Categorical Variables", 
+       x = "Variables", y = "Variables", fill = "Cramér's V") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+
+```
+ 
+
+<!-- # PCA for continous data -->
+
+<!-- ```{r} -->
+<!-- # Perform PCA on the continuous variables -->
+<!-- library(factoextra) -->
+<!-- pca_result <- prcomp(train[continuous_vars], scale = TRUE) -->
+
+<!-- # Summary of PCA -->
+<!-- summary(pca_result) -->
+
+<!-- # Scree plot for PCA -->
+<!-- fviz_screeplot(pca_result, addlabels = TRUE, title = "Scree Plot of PCA") -->
+
+<!-- # Plot PCA Individuals (Observations) -->
+<!-- fviz_pca_ind(pca_result, col.ind = "blue", title = "Individuals Plot of PCA") -->
+
+<!-- # Plot PCA Variables (Continuous Variables) -->
+<!-- fviz_pca_var(pca_result, col.var = "red", title = "Variables Plot of PCA") -->
+
+<!-- # Extract PCA components for further analysis -->
+<!-- pca_data <- as.data.frame(pca_result$x)  # Extract PCA components -->
+
+
+<!-- ``` -->
+<!-- # MCA for catogorical data -->
+
+<!-- ```{r} -->
+<!-- library(FactoMineR) -->
+<!-- # Perform MCA on categorical variables -->
+<!-- mca_result <- MCA(train[categorical_vars], graph = FALSE) -->
+
+<!-- # Summary of MCA -->
+<!-- mca_result$eig -->
+
+<!-- # Scree plot for MCA -->
+<!-- fviz_screeplot(mca_result, addlabels = TRUE, title = "Scree Plot of MCA") -->
+
+<!-- # Plot MCA Individuals (Observations) -->
+<!-- fviz_mca_ind(mca_result, col.ind = "blue", title = "Individuals Plot of MCA") -->
+
+<!-- # Plot MCA Variables (Categories) -->
+<!-- fviz_mca_var(mca_result, col.var = "red", title = "Variables Plot of MCA") -->
+
+<!-- # Extract MCA components for further analysis -->
+<!-- mca_data <- as.data.frame(mca_result$ind$coord)  # Extract MCA components -->
+
+
+<!-- ``` -->
+<!-- # combined them( PCA $ MCA) -->
+
+<!-- ```{r} -->
+<!-- # Keep only the first 3 PCA components -->
+<!-- pca_selected <- pca_data[, 1:3] -->
+
+<!-- # Keep only the first 5 MCA components -->
+<!-- mca_selected <- mca_data[, 1:5] -->
+
+<!-- # Combine PCA and MCA results -->
+<!-- combined_data <- cbind(pca_selected, mca_selected) -->
+
+<!-- # View the structure of the new dataset -->
+<!-- str(combined_data) -->
+
+<!-- # standerdize( they have different scales) -->
+<!-- combined_data <- scale(combined_data) -->
+
+
+<!-- ``` -->
+
+
+
+
+
+
+
+
+<!-- #/* DIMENTION REDUCTION by Factor Analysis of Mixed Data (FAMD) -->
+<!-- ```{r} -->
+<!--  # Load necessary libraries -->
+<!-- library(FactoMineR) -->
+<!-- library(factoextra) -->
+
+
+
+<!-- # Specify the continuous and categorical variables -->
+<!-- continuous_vars <- c("sqft_living", "sqft_lot", "price", "sqft_above", "sqft_basement") -->
+<!-- categorical_vars <-  c("bedrooms", "bathrooms", "floors", "waterfront",  -->
+<!--                       "view", "condition", "statezip",  -->
+<!--                       "monthHS", "dayHS","city", "sqft_basement_Categorized") -->
+
+<!-- # Convert categorical variables to factors -->
+<!-- train[categorical_vars] <- lapply(train[categorical_vars], as.factor) -->
+
+<!-- # Ensure continuous variables are numeric -->
+<!-- train[continuous_vars] <- lapply(train[continuous_vars], as.numeric) -->
+
+<!-- # Remove rows with missing values (if any) -->
+<!-- train <- na.omit(train) -->
+
+<!-- # Reset row names to avoid duplicate row name issues -->
+<!-- rownames(train) <- NULL -->
+
+<!-- # Perform Factor Analysis of Mixed Data (FAMD) -->
+<!-- famd_result <- FAMD(train[, c(continuous_vars, categorical_vars)], graph = FALSE) -->
+
+<!-- # Check the summary of the FAMD result -->
+<!-- summary(famd_result) -->
+
+<!-- # View the eigenvalues (explained variance) -->
+<!-- print(famd_result$eig) -->
+
+<!-- # Create a Scree plot to visualize the explained variance by each component -->
+<!-- fviz_screeplot(famd_result, addlabels = TRUE, title = "Scree Plot of FAMD") -->
+
+<!-- # Plot individuals (observations) on the first two dimensions -->
+<!-- fviz_famd_ind(famd_result, col.ind = "blue", title = "Individuals Plot of FAMD") -->
+
+<!-- # Plot variables (categories) on the first two dimensions -->
+<!-- fviz_famd_var(famd_result, geom = "text", col.var = "red", title = "Variables Plot of FAMD") -->
+
+<!-- print(famd_result$eig) -->
+
+
+
+
+<!-- ``` -->
+<!-- # PLS FOER MIX DATA  ( TRAIN SET) -->
+
+<!-- ```{r} -->
+<!-- library(mdatools) -->
+<!-- library(caret) -->
+<!-- library(pls) -->
+
+<!-- # Ensure factor levels in the test set match the training set -->
+<!-- for (var in categorical_vars) { -->
+<!--   levels(test[[var]]) <- levels(train[[var]])  # Set test levels to match training set levels -->
+<!-- } -->
+
+<!-- # Apply dummyVars to the training set -->
+<!-- dummies <- dummyVars(price ~ ., data = train[c(categorical_vars, "price")], fullRank = TRUE) -->
+
+<!-- # Apply dummyVars to the training dataset -->
+<!-- train_dummies <- predict(dummies, newdata = train[c(categorical_vars, "price")]) -->
+<!-- Xc <- cbind(train[, continuous_vars], train_dummies) -->
+
+<!-- # Define the response variable for the training set -->
+<!-- yc <- train$price  # Training response variable -->
+
+<!-- # Apply dummyVars to the test dataset -->
+<!-- test_dummies <- predict(dummies, newdata = test[c(categorical_vars, "price")])  # Apply on test dataset -->
+<!-- Xt <- cbind(test[, continuous_vars], test_dummies)  # Combine continuous and dummy variables for test set -->
+
+<!-- # Define the response variable for the test set -->
+<!-- yt <- test$price  # Test response variable -->
+
+<!-- # Check dimensions of predictor and response variables -->
+<!-- cat("Dimensions of Xc:", dim(Xc), "\n") -->
+<!-- cat("Length of yc:", length(yc), "\n") -->
+<!-- cat("Dimensions of Xt:", dim(Xt), "\n") -->
+<!-- cat("Length of yt:", length(yt), "\n") -->
+
+<!-- # Fit the PLS model -->
+<!-- Model1 <- pls(Xc, yc, scale = TRUE, cv = 1, info = "House Price Prediction Model") -->
+<!-- summary(Model1) -->
+<!-- plot(Model1) -->
+
+<!-- # Plotting coefficients and residuals -->
+<!-- par(mfrow = c(2, 1)) -->
+<!-- plot(Model1$coeffs, ncomp = 2, type = "b", show.labels = TRUE) -->
+<!-- plot(Model1$coeffs, ncomp = 2, type = "h", alpha = 0.05, show.ci = TRUE, show.labels = TRUE) -->
+
+<!-- # Check for outliers -->
+<!-- Model0 <- setDistanceLimits(Model1, lim.type = "ddrobust") -->
+<!-- plotXYResiduals(Model0, show.labels = TRUE, labels = "indices") -->
+
+<!-- # Variable selection with VIP -->
+<!-- plotVIPScores(Model1, ncomp = 2, type = "h", show.labels = TRUE) -->
+<!-- vip <- vipscores(Model1, ncomp = 2) -->
+<!-- Model2 <- pls(Xc, yc, scale = TRUE, cv = 1, exclcols = (vip < 0.5)) -->
+<!-- summary(Model2) -->
+<!-- plot(Model2) -->
+
+<!-- # Predictions on test set -->
+<!-- Pred <- predict(Model2, Xt)  # Only Xt is passed to the predict function -->
+<!-- plot(Pred) -->
+
+<!-- ``` -->
+<!-- #  PLS FOR TEST SET -->
+
+<!-- ```{r} -->
+<!--  # Assuming Model2 is your final PLS model trained on the training set -->
+<!-- Pred_test <- predict(Model2, Xt) -->
+
+<!-- # Check the structure of Pred_test -->
+<!-- str(Pred_test) -->
+
+<!-- # If Pred_test is a matrix or a list with multiple components, extract the correct predictions -->
+<!-- # For instance, if it has multiple components per sample, we want just the first component -->
+<!-- Pred_test <- as.numeric(Pred_test[[1]]) -->
+<!-- Pred_test <- Pred_test[1:640]# Extract numeric predictions -->
+
+<!-- # Now ensure the length of Pred_test is 640 (the number of test samples) -->
+<!-- cat("Length of Pred_test after extraction:", length(Pred_test), "\n") -->
+
+<!-- # Ensure yt (actual values) is numeric as well -->
+<!-- yt <- as.numeric(yt) -->
+
+<!-- # Ensure the lengths match -->
+<!-- cat("Length of yt:", length(yt), "\n") -->
+
+<!-- # If they have the same length, plot them -->
+<!-- if (length(Pred_test) == length(yt)) { -->
+<!--   plot(Pred_test, yt, main = "Predictions vs Actual (Test Set)",  -->
+<!--        xlab = "Predicted", ylab = "Actual", col = "blue", pch = 19) -->
+<!--   abline(0, 1, col = "red")  # Add 1:1 line for reference -->
+<!-- } else { -->
+<!--   cat("Mismatch in lengths of predicted and actual values. Please check the data.") -->
+<!-- } -->
+
+<!-- ``` -->
+
+# SCALE TRAIN SET
+```{r}
+ 
+continuous_vars <- c("sqft_living","price", "sqft_lot","sqft_above", "sqft_basement","House_Age")  # Example numerical variables
+
+# Scale the numerical variables
+
+ train[continuous_vars] <- scale(train[continuous_vars])
+# View the scaled data
+head(train)
+
+
+```
+# SCALE TEST SET
+```{r}
+ 
+continuous_vars <- c("sqft_living","price", "sqft_lot", "sqft_above", "sqft_basement","House_Age")  # Example numerical variables
+
+# Scale the numerical variables
+
+ test[continuous_vars] <- scale(test[continuous_vars])
+
+# View the scaled data
+head(test)
+
+
+```
+## Ridge regression
+```{r} 
+
+# Load necessary libraries
+library(glmnet)
+library(caret)
+
+# Specify continuous and categorical variables
+continuous_vars <- c("sqft_living", "sqft_lot", "price", "sqft_above", "sqft_basement","House_Age")
+categorical_vars <- c("bedrooms", "bathrooms", "floors", "waterfront", 
+                      "view", "condition", "monthHS", "dayHS", "city", 
+                      "sqft_basement_Categorized","statezip")  # Exclude 'statezip'
+
+# One-hot encode categorical variables (excluding 'statezip')
+dummies <- dummyVars(price ~ ., data = train[, c(categorical_vars, continuous_vars)], fullRank = TRUE)
+x_categorical <- predict(dummies, newdata = train)
+
+# Combine continuous and encoded categorical variables
+x_continuous <- as.matrix(train[, continuous_vars[continuous_vars != "price"]])  # Exclude price from predictors
+x <- cbind(x_continuous, x_categorical) 
+x <- x[, !duplicated(colnames(x))]# Final predictor matrix
+
+# Response variable
+y <- train$price
+
+# Fit Ridge Regression
+fit.ridge <- glmnet(x, y, alpha = 0)
+plot(fit.ridge, xvar = "lambda", label = TRUE, lw = 2)
+
+# Cross-validation to select the best lambda
+set.seed(1234)
+cv.ridge <- cv.glmnet(x, y, alpha = 0)
+plot(cv.ridge)
+bestlam <- cv.ridge$lambda.min
+cat("Best lambda:", bestlam, "\n")
+
+# Fit Ridge model with the best lambda and view coefficients
+final_ridge <- glmnet(x, y, alpha = 0, lambda = bestlam)
+coef(final_ridge)
+
+# plot
+
+
+```
+# predict test set (ridge)
+```{r}
+ # Assuming the test data is loaded and named 'test'
+
+# Prepare test data with one-hot encoding
+x_test_categorical <- predict(dummies, newdata = test[, c(categorical_vars, continuous_vars)])
+
+# Prepare continuous variables for test data (exclude price)
+x_test_continuous <- as.matrix(test[, continuous_vars[continuous_vars != "price"]])
+
+# Combine the continuous and encoded categorical variables for the test set
+x_test <- cbind(x_test_continuous, x_test_categorical)
+x_test <- x_test[, !duplicated(colnames(x_test))]
+
+# Predict on the test set using the final Ridge model
+y_pred <- predict(final_ridge, s = bestlam, newx = x_test)
+
+# Compare the predictions to the actual values
+y_actual <- test$price
+
+# Calculate Mean Squared Error (MSE)
+mse <- mean((y_pred - y_actual)^2)
+cat("Test (MSE):", mse, "\n")
+# TRAINIG MSE
+
+# Predict on the training set
+y_train_pred <- predict(final_ridge, s = bestlam, newx = x)
+
+ # Training MSE
+mse_train <- mean((y - y_train_pred)^2)
+cat("Training MSE:", mse_train, "\n")
+
+# Correct Training R²
+sst_train <- sum((y - mean(y))^2)  # Total Sum of Squares for training
+rss_train <- sum((y - y_train_pred)^2)  # Residual Sum of Squares for training
+rsq_train <- 1 - (rss_train / sst_train)  # Correct formula for R²
+cat("Training R²:", rsq_train, "\n")
+
+# Test MSE
+mse_test <- mean((y_pred - y_actual)^2)
+cat("Test MSE:", mse_test, "\n")
+
+# Correct Test R²
+sst_test <- sum((y_actual - mean(y_actual))^2)  # Total Sum of Squares for test
+rss_test <- sum((y_actual - y_pred)^2)  # Residual Sum of Squares for test
+rsq_test <- 1 - (rss_test / sst_test)  # Correct formula for R²
+cat("Test R²:", rsq_test, "\n")
+
+# Plot Predicted vs Actual
+plot(y_actual, y_pred, main = "Predicted vs Actual", 
+     xlab = "Actual Price", ylab = "Predicted Price", 
+     pch = 19, col = "blue")
+abline(0, 1, col = "red")  # Add a reference line for perfect predictions
+
+```
+
+# LASSO 
+
+```{r}
+# Load necessary libraries
+library(glmnet)
+library(caret)
+
+# Specify continuous and categorical variables
+continuous_vars <- c("sqft_living", "sqft_lot", "price", "sqft_above", "sqft_basement","House_Age")
+categorical_vars <- c("bedrooms", "bathrooms", "floors", "waterfront", 
+                      "view", "condition", "monthHS", "dayHS", "city", 
+                      "sqft_basement_Categorized","statezip" )  # Exclude 'statezip'
+
+# One-hot encode categorical variables (excluding 'statezip')
+dummies <- dummyVars(price ~ ., data = train[, c(categorical_vars, continuous_vars)], fullRank = TRUE)
+x_categorical <- predict(dummies, newdata = train)
+
+# Combine continuous and encoded categorical variables
+x_continuous <- as.matrix(train[, continuous_vars[continuous_vars != "price"]])  # Exclude price from predictors
+x <- cbind(x_continuous, x_categorical)
+x <- x[, !duplicated(colnames(x))]# Final predictor matrix
+
+# Response variable
+y <- train$price
+
+# Fit Lasso Regression
+fit.lasso <- glmnet(x, y, alpha = 1)
+plot(fit.lasso, xvar = "lambda", label = TRUE, lw = 2)
+
+# Cross-validation to select the best lambda for Lasso
+set.seed(1234)
+cv.lasso <- cv.glmnet(x, y, alpha = 1)
+plot(cv.lasso)
+bestlam_lasso <- cv.lasso$lambda.min
+cat("Best lambda for Lasso:", bestlam_lasso, "\n")
+
+# Fit Lasso model with the best lambda and view coefficients
+final_lasso <- glmnet(x, y, alpha = 1, lambda = bestlam_lasso)
+coef(final_lasso)
+
+# Predict on the test set using the final Lasso model
+# Assuming the test data is loaded and named 'test'
+x_test_categorical <- predict(dummies, newdata = test[, c(categorical_vars, continuous_vars)])
+x_test_continuous <- as.matrix(test[, continuous_vars[continuous_vars != "price"]])
+x_test <- cbind(x_test_continuous, x_test_categorical)
+x_test <- x_test[, !duplicated(colnames(x_test))]
+
+y_pred_lasso <- predict(final_lasso, s = bestlam_lasso, newx = x_test)
+
+# Compare the predictions to the actual values
+y_actual <- test$price
+
+# Calculate Mean Squared Error (MSE)
+mse_lasso <- mean((y_pred_lasso - y_actual)^2)
+cat("Test (MSE) for Lasso:", mse_lasso, "\n")
+
+# TRAINING MSE for Lasso
+
+y_train_pred_lasso <- predict(final_lasso, s = bestlam_lasso, newx = x)
+mse_train_lasso <- mean((y - y_train_pred_lasso)^2)
+cat("Training MSE for Lasso:", mse_train_lasso, "\n")
+
+# Calculate Training R² for Lasso
+st_train_lasso <- sum((y - mean(y))^2)  # Total Sum of Squares for training
+rss_train_lasso <- sum((y - y_train_pred_lasso)^2)  # Residual Sum of Squares for training
+rsq_train_lasso <- 1 - (rss_train_lasso / st_train_lasso)  # Correct formula for R²
+
+cat("Training R² for Lasso:", rsq_train_lasso, "\n")
+
+# Calculate R-squared (R²) for Test Set
+sst_test_lasso <- sum((y_actual - mean(y_actual))^2)  # Total Sum of Squares for test
+rss_test_lasso <- sum((y_actual - y_pred_lasso)^2)  # Residual Sum of Squares
+rsq_test_lasso <- 1 - (rss_test_lasso / sst_test_lasso)  # Corrected R²
+
+cat("Test R-squared (R²) for Lasso:", rsq_test_lasso, "\n")
+
+# Plot Predicted vs Actual for Lasso
+plot(y_actual, y_pred_lasso, main = "Predicted vs Actual (Lasso)", 
+     xlab = "Actual Price", ylab = "Predicted Price", 
+     pch = 19, col = "blue")
+abline(0, 1, col = "red")  # Add a reference line for perfect predictions
+
+
+
+```
+
+##GBM (Gradient Boosting Machine) model
+
+```{R}
+ library(gbm)
+library(caret)
+
+# Specify continuous and categorical variables
+continuous_vars <- c("sqft_living", "sqft_lot", "price", "sqft_above", "sqft_basement", "House_Age")
+categorical_vars <- c("bedrooms", "bathrooms", "floors", "waterfront", 
+                      "view", "condition", "monthHS", "dayHS", "city", 
+                      "sqft_basement_Categorized", "statezip")  
+
+# One-hot encode categorical variables
+dummies <- dummyVars(price ~ ., data = train[, c(categorical_vars, continuous_vars)], fullRank = TRUE)
+x_categorical <- predict(dummies, newdata = train)
+
+# Combine continuous and encoded categorical variables
+x_continuous <- as.matrix(train[, continuous_vars[continuous_vars != "price"]])  # Exclude price
+x <- cbind(x_continuous, x_categorical)
+x <- x[, !duplicated(colnames(x))]
+y <- train$price  # Response variable
+
+# Convert to data frame for GBM
+train_gbm <- data.frame(price = y, x)
+
+# Fit GBM Model
+set.seed(1234)
+gbm_model <- gbm(price ~ ., data = train_gbm, 
+                 distribution = "gaussian", 
+                 n.trees = 1000, 
+                 interaction.depth = 6, 
+                 shrinkage = 0.01, 
+                 cv.folds = 5, 
+                 verbose = FALSE)
+
+# Best number of trees based on cross-validation
+best_trees <- gbm.perf(gbm_model, method = "cv")
+
+# --- Training Predictions ---
+y_pred_train <- predict(gbm_model, newdata = train_gbm, n.trees = best_trees)
+
+# Calculate Training MSE
+mse_train <- mean((y_pred_train - y)^2)
+cat("Training MSE for GBM:", mse_train, "\n")
+
+# Calculate Training R²
+sst_train <- sum((y - mean(y))^2)
+rss_train <- sum((y - y_pred_train)^2)
+rsq_train <- 1 - (rss_train / sst_train)
+cat("Training R-squared (R²) for GBM:", rsq_train, "\n")
+
+# --- Test Predictions ---
+x_test_categorical <- predict(dummies, newdata = test[, c(categorical_vars, continuous_vars)])
+x_test_continuous <- as.matrix(test[, continuous_vars[continuous_vars != "price"]])
+x_test <- cbind(x_test_continuous, x_test_categorical)
+x_test <- x_test[, !duplicated(colnames(x_test))]
+test_gbm <- data.frame(x_test)
+
+y_actual <- test$price
+y_pred_gbm <- predict(gbm_model, newdata = test_gbm, n.trees = best_trees)
+
+# Calculate Test MSE
+mse_test <- mean((y_pred_gbm - y_actual)^2)
+cat("Test MSE for GBM:", mse_test, "\n")
+
+# Calculate Test R²
+sst_test <- sum((y_actual - mean(y_actual))^2)
+rss_test <- sum((y_actual - y_pred_gbm)^2)
+rsq_test <- 1 - (rss_test / sst_test)
+cat("Test R-squared (R²) for GBM:", rsq_test, "\n")
+
+# Plot Predicted vs Actual
+plot(y_actual, y_pred_gbm, main = "Predicted vs Actual (GBM)", 
+     xlab = "Actual Price", ylab = "Predicted Price", 
+     pch = 19, col = "blue")
+abline(0, 1, col = "red")
+
+
+```
+
+# NEURAL NETWORKS
+
+```{r}
+# Load necessary libraries
+library(nnet)
+library(caret)
+
+# Specify continuous and categorical variables
+continuous_vars <- c("sqft_living", "price", "sqft_lot", "sqft_above", "sqft_basement", "House_Age")
+categorical_vars <- c("bedrooms", "bathrooms", "floors", "waterfront", 
+                      "view", "condition", "monthHS", "dayHS", "city", 
+                      "sqft_basement_Categorized")
+
+# One-hot encode categorical variables
+dummies <- dummyVars(price ~ ., data = train[, c(categorical_vars, continuous_vars)], fullRank = TRUE)
+x_categorical <- predict(dummies, newdata = train)
+
+# Extract continuous variables (already scaled)
+x_continuous <- as.matrix(train[, continuous_vars[continuous_vars != "price"]])
+
+# Combine continuous and encoded categorical variables
+x <- cbind(x_continuous, x_categorical)  # Final predictor matrix
+x <- x[, !duplicated(colnames(x))]
+y <- train$price  # Response variable remains scaled
+
+# Fit Neural Network
+set.seed(123)  # For reproducibility
+nn_model <- nnet(x, y, size = 5, linout = TRUE, maxit = 500)
+
+# Predict on the test set
+x_test_categorical <- predict(dummies, newdata = test[, c(categorical_vars, continuous_vars)])
+x_test_continuous <- as.matrix(test[, continuous_vars[continuous_vars != "price"]])
+x_test <- cbind(x_test_continuous, x_test_categorical)
+x_test <- x_test[, !duplicated(colnames(x_test))]
+
+y_pred_nn <- predict(nn_model, x_test)
+
+y_actual <- test$price
+
+# Calculate Mean Squared Error (MSE)
+mse_nn <- mean((y_pred_nn - y_actual)^2)
+cat("Test MSE for Neural Network:", mse_nn, "\n")
+
+# Calculate R-squared (R²) for Test Set
+sst_test_nn <- sum((y_actual - mean(y_actual))^2)  # Total Sum of Squares for test
+rss_test_nn <- sum((y_actual - y_pred_nn)^2)  # Residual Sum of Squares
+rsq_test_nn <- 1 - (rss_test_nn / sst_test_nn)  # Corrected R²
+
+cat("Test R-squared (R²) for Neural Network:", rsq_test_nn, "\n")
+
+# Plot Predicted vs Actual
+plot(y_actual, y_pred_nn, main = "Predicted vs Actual (Neural Network)", 
+     xlab = "Actual Price", ylab = "Predicted Price", 
+     pch = 19, col = "blue")
+abline(0, 1, col = "red")
+
+```
+
+# Ilastic Net
+
+```{r}
+ 
+# Load necessary libraries
+library(glmnet)
+library(caret)
+
+# Specify continuous and categorical variables
+continuous_vars <- c("sqft_living", "sqft_lot", "price", "sqft_above", "sqft_basement", "House_Age")
+categorical_vars <- c("bedrooms", "bathrooms", "floors", "waterfront", 
+                      "view", "condition", "monthHS", "dayHS", "city", 
+                      "sqft_basement_Categorized", "statezip")  # Exclude 'statezip'
+
+# One-hot encode categorical variables (excluding 'statezip')
+dummies <- dummyVars(price ~ ., data = train[, c(categorical_vars, continuous_vars)], fullRank = TRUE)
+x_categorical <- predict(dummies, newdata = train)
+
+# Combine continuous and encoded categorical variables
+x_continuous <- as.matrix(train[, continuous_vars[continuous_vars != "price"]])  # Exclude price from predictors
+x <- cbind(x_continuous, x_categorical)  # Final predictor matrix
+x <- x[, !duplicated(colnames(x))]
+# Response variable
+y <- train$price
+
+# Fit Elastic Net Regression
+set.seed(1234)
+cv.elastic <- cv.glmnet(x, y, alpha = 0.5)  # Alpha = 0.5 for Elastic Net (mix of Ridge and Lasso)
+plot(cv.elastic)
+bestlam_elastic <- cv.elastic$lambda.min
+cat("Best lambda for Elastic Net:", bestlam_elastic, "\n")
+
+# Fit Elastic Net model with the best lambda and view coefficients
+final_elastic <- glmnet(x, y, alpha = 0.5, lambda = bestlam_elastic)
+coef(final_elastic)
+
+# Predict on the test set using the final Elastic Net model
+x_test_categorical <- predict(dummies, newdata = test[, c(categorical_vars, continuous_vars)])
+x_test_continuous <- as.matrix(test[, continuous_vars[continuous_vars != "price"]])
+x_test <- cbind(x_test_continuous, x_test_categorical)
+x_test <- x_test[, !duplicated(colnames(x_test))]
+
+y_pred_elastic <- predict(final_elastic, s = bestlam_elastic, newx = x_test)
+
+# Compare the predictions to the actual values
+y_actual <- test$price
+
+# Calculate Mean Squared Error (MSE)
+mse_elastic <- mean((y_pred_elastic - y_actual)^2)
+cat("Test (MSE) for Elastic Net:", mse_elastic, "\n")
+
+# Calculate R-squared for Test Data
+ss_total_test <- sum((y_actual - mean(y_actual))^2)
+ss_residual_test <- sum((y_actual - y_pred_elastic)^2)
+r2_test <- 1 - (ss_residual_test / ss_total_test)
+cat("Test R^2 for Elastic Net:", r2_test, "\n")
+
+# TRAINING MSE for Elastic Net
+y_train_pred_elastic <- predict(final_elastic, s = bestlam_elastic, newx = x)
+mse_train_elastic <- mean((y - y_train_pred_elastic)^2)
+cat("Training MSE for Elastic Net:", mse_train_elastic, "\n")
+
+# Calculate R-squared for Training Data
+ss_total_train <- sum((y - mean(y))^2)
+ss_residual_train <- sum((y - y_train_pred_elastic)^2)
+r2_train <- 1 - (ss_residual_train / ss_total_train)
+cat("Training R^2 for Elastic Net:", r2_train, "\n")
+
+# Plot residuals for the training set
+residuals_train <- y - y_train_pred_elastic
+plot(residuals_train, main = "Residuals for Training Data", ylab = "Residuals", xlab = "Index")
+abline(h = 0, col = "red")
+
+##############################
+
+# Get coefficients for the final Elastic Net model
+coefficients <- coef(final_elastic, s = bestlam_elastic)
+
+# Convert the coefficients to a data frame for easier manipulation
+coefficients_df <- data.frame(Feature = rownames(coefficients), 
+                               Coefficient = as.vector(coefficients))
+# Remove the intercept row
+coefficients_df <- coefficients_df[-1, ]
+
+# Sort the features by the absolute value of the coefficients (feature importance)
+coefficients_df$Abs_Coefficient <- abs(coefficients_df$Coefficient)
+coefficients_df <- coefficients_df[order(-coefficients_df$Abs_Coefficient), ]
+
+# Display top 10 most important features
+head(coefficients_df, 10)
+
+# Plot feature importance
+library(ggplot2)
+ggplot(coefficients_df, aes(x = reorder(Feature, Abs_Coefficient), 
+                            y = Abs_Coefficient)) +
+  geom_bar(stat = "identity", fill = "skyblue") +
+  coord_flip() +
+  labs(title = "Feature Importance (Elastic Net)", 
+       x = "Feature", 
+       y = "Absolute Coefficient Value") +
+  theme_minimal()
+
+
+```
+# MULTICOLLINEARITY
+
+```{R}
+ 
+  
+
+```
+#XG Boost 
+```{r}
+#XG Boost 
+
+
+# Load necessary libraries
+library(xgboost)
+library(caret)
+library(Matrix)
+ 
+
+# Specify continuous and categorical variables
+continuous_vars <- c("sqft_living", "sqft_lot", "price", "sqft_above", "sqft_basement", "House_Age")
+categorical_vars <- c("bedrooms", "bathrooms", "floors", "waterfront", 
+                      "view", "condition", "monthHS", "dayHS", "city", 
+                      "sqft_basement_Categorized", "statezip")  # Exclude 'statezip'
+ 
+
+# One-hot encode categorical variables (excluding 'statezip')
+dummies <- dummyVars(price ~ ., data = train[, c(categorical_vars, continuous_vars)], fullRank = TRUE)
+x_categorical <- predict(dummies, newdata = train)
+
+# Combine continuous and encoded categorical variables
+x_continuous <- as.matrix(train[, continuous_vars[continuous_vars != "price"]])  # Exclude price from predictors
+
+ 
+
+x <- cbind(x_continuous, x_categorical) 
+x <- x[, !duplicated(colnames(x))]
+
+# Final predictor matrix
+
+y <- train$price
+
+# Convert to xgb.DMatrix format
+dtrain <- xgb.DMatrix(data = x, label = y)
+
+# Define parameters for XGBoost
+params <- list(
+  objective = "reg:squarederror",
+  booster = "gbtree",
+  eta = 0.1,
+  max_depth = 6,
+  subsample = 0.8,
+  colsample_bytree = 0.8
+)
+
+# Cross-validation to determine the best number of rounds
+set.seed(1234)
+xgb_cv <- xgb.cv(params = params, data = dtrain, nrounds = 500, 
+                 nfold = 5, verbose = 0, early_stopping_rounds = 10)
+best_nrounds <- xgb_cv$best_iteration
+
+# Train final XGBoost model
+final_xgb <- xgboost(params = params, data = dtrain, nrounds = best_nrounds, verbose = 0)
+
+# Prepare test data
+x_test_categorical <- predict(dummies, newdata = test[, c(categorical_vars, continuous_vars)])
+x_test_continuous <- as.matrix(test[, continuous_vars[continuous_vars != "price"]])
+x_test <- cbind(x_test_continuous, x_test_categorical)
+x_test <- x_test[, !duplicated(colnames(x_test))]
+dtest <- xgb.DMatrix(data = x_test)
+
+y_pred_xgb <- predict(final_xgb, newdata = dtest)
+
+y_actual <- test$price
+
+# Calculate Mean Squared Error (MSE)
+mse_xgb <- mean((y_pred_xgb - y_actual)^2)
+cat("Test (MSE) for XGBoost:", mse_xgb, "\n")
+
+# Calculate R-squared for Test Data
+ss_total_test <- sum((y_actual - mean(y_actual))^2)
+ss_residual_test <- sum((y_actual - y_pred_xgb)^2)
+r2_test_xgb <- 1 - (ss_residual_test / ss_total_test)
+cat("Test R^2 for XGBoost:", r2_test_xgb, "\n")
+
+# TRAINING MSE for XGBoost
+y_train_pred_xgb <- predict(final_xgb, newdata = dtrain)
+mse_train_xgb <- mean((y - y_train_pred_xgb)^2)
+cat("Training MSE for XGBoost:", mse_train_xgb, "\n")
+
+# Calculate R-squared for Training Data
+ss_total_train <- sum((y - mean(y))^2)
+ss_residual_train <- sum((y - y_train_pred_xgb)^2)
+r2_train_xgb <- 1 - (ss_residual_train / ss_total_train)
+cat("Training R^2 for XGBoost:", r2_train_xgb, "\n")
+
+# feature selection
+
+importance_matrix <- xgb.importance(feature_names = colnames(x), model = final_xgb)
+print(importance_matrix)
+
+library(ggplot2)
+xgb.plot.importance(importance_matrix, top_n = 20)  
+ 
+```
+
+# RANDOM FOREST
+
+```{R}
+# Load necessary libraries
+library(randomForest)
+library(caret)
+
+# Specify continuous and categorical variables
+continuous_vars <- c("sqft_living", "sqft_lot", "price", "sqft_above", "sqft_basement", "House_Age")
+categorical_vars <- c("bedrooms", "bathrooms", "floors", "waterfront", 
+                      "view", "condition", "monthHS", "dayHS", "city", 
+                      "sqft_basement_Categorized")  # Exclude 'statezip'
+
+# One-hot encode categorical variables (excluding 'statezip')
+dummies <- dummyVars(price ~ ., data = train[, c(categorical_vars, continuous_vars)], fullRank = TRUE)
+x_categorical <- predict(dummies, newdata = train)
+
+# Combine continuous and encoded categorical variables
+x_continuous <- as.matrix(train[, continuous_vars[continuous_vars != "price"]])  # Exclude price from predictors
+x <- cbind(x_continuous, x_categorical)  # Final predictor matrix
+x <- x[, !duplicated(colnames(x))]  # Remove duplicate columns
+# Response variable
+y <- train$price
+
+# Fit Random Forest model
+set.seed(1234)
+rf_model <- randomForest(x, y, importance = TRUE, ntree = 500)
+
+# View model summary
+print(rf_model)
+
+# Predict on the test set using the trained Random Forest model
+x_test_categorical <- predict(dummies, newdata = test[, c(categorical_vars, continuous_vars)])
+x_test_continuous <- as.matrix(test[, continuous_vars[continuous_vars != "price"]])
+x_test <- cbind(x_test_continuous, x_test_categorical)
+x_test <- x_test[, !duplicated(colnames(x_test))]
+
+y_pred_rf <- predict(rf_model, newdata = x_test)
+
+# Compare the predictions to the actual values
+y_actual <- test$price
+
+# Calculate Mean Squared Error (MSE)
+mse_rf <- mean((y_pred_rf - y_actual)^2)
+cat("Test (MSE) for Random Forest:", mse_rf, "\n")
+
+# Calculate R-squared for Test Data
+ss_total_test <- sum((y_actual - mean(y_actual))^2)
+ss_residual_test <- sum((y_actual - y_pred_rf)^2)
+r2_test_rf <- 1 - (ss_residual_test / ss_total_test)
+cat("Test R^2 for Random Forest:", r2_test_rf, "\n")
+
+# TRAINING MSE for Random Forest
+y_train_pred_rf <- predict(rf_model, newdata = x)
+mse_train_rf <- mean((y - y_train_pred_rf)^2)
+cat("Training MSE for Random Forest:", mse_train_rf, "\n")
+
+# Calculate R-squared for Training Data
+ss_total_train <- sum((y - mean(y))^2)
+ss_residual_train <- sum((y - y_train_pred_rf)^2)
+r2_train_rf <- 1 - (ss_residual_train / ss_total_train)
+cat("Training R^2 for Random Forest:", r2_train_rf, "\n")
+
+# Plot residuals for the training set
+residuals_train_rf <- y - y_train_pred_rf
+plot(residuals_train_rf, main = "Residuals for Training Data", ylab = "Residuals", xlab = "Index")
+abline(h = 0, col = "red")
+
+# Get feature importance
+importance_rf <- importance(rf_model)
+importance_df_rf <- data.frame(Feature = rownames(importance_rf), Importance = importance_rf[, 1])
+
+# Sort features by importance
+importance_df_rf <- importance_df_rf[order(-importance_df_rf$Importance), ]
+
+# Display top 10 most important features
+head(importance_df_rf, 10)
+
+# Plot feature importance
+library(ggplot2)
+ggplot(importance_df_rf, aes(x = reorder(Feature, Importance), y = Importance)) +
+  geom_bar(stat = "identity", fill = "skyblue") +
+  coord_flip() +
+  labs(title = "Feature Importance (Random Forest)", 
+       x = "Feature", 
+       y = "Importance (MeanDecreaseGini)") +
+  theme_minimal()
+
+```
+<!-- # ADA Boost  -->
+
+<!-- ```{r} -->
+<!-- # Load necessary libraries -->
+<!-- library(adabag) -->
+<!-- library(caret) -->
+
+<!-- # Specify continuous and categorical variables (same as in your Lasso code) -->
+<!-- continuous_vars <- c("sqft_living", "sqft_lot", "price", "sqft_above", "sqft_basement", "House_Age") -->
+<!-- categorical_vars <- c("bedrooms", "bathrooms", "floors", "waterfront",  -->
+<!--                       "view", "condition", "monthHS", "dayHS", "city",  -->
+<!--                       "sqft_basement_Categorized", "statezip")  # Exclude 'statezip' -->
+
+<!-- # One-hot encode categorical variables (excluding 'statezip') -->
+<!-- dummies <- dummyVars(price ~ ., data = train[, c(categorical_vars, continuous_vars)], fullRank = TRUE) -->
+<!-- x_categorical <- predict(dummies, newdata = train) -->
+
+<!-- # Combine continuous and encoded categorical variables -->
+<!-- x_continuous <- as.matrix(train[, continuous_vars[continuous_vars != "price"]])  # Exclude price from predictors -->
+<!-- x <- cbind(x_continuous, x_categorical) -->
+<!-- x <- x[, !duplicated(colnames(x))]  # Final predictor matrix -->
+
+<!-- # Response variable -->
+<!-- y <- train$price -->
+
+<!-- # Fit AdaBoost model -->
+<!-- adaboost_model <- boosting(price ~ ., data = train[, c(categorical_vars, continuous_vars)]) -->
+
+<!-- # Make predictions on the test set -->
+<!-- x_test_categorical <- predict(dummies, newdata = test[, c(categorical_vars, continuous_vars)]) -->
+<!-- x_test_continuous <- as.matrix(test[, continuous_vars[continuous_vars != "price"]]) -->
+<!-- x_test <- cbind(x_test_continuous, x_test_categorical) -->
+<!-- x_test <- x_test[, !duplicated(colnames(x_test))] -->
+
+<!-- y_pred_adaboost <- predict(adaboost_model, newdata = test[, c(categorical_vars, continuous_vars)])$class -->
+
+<!-- # Compare the predictions to the actual values -->
+<!-- y_actual <- test$price -->
+
+<!-- # Calculate Mean Squared Error (MSE) -->
+<!-- mse_adaboost <- mean((y_pred_adaboost - y_actual)^2) -->
+<!-- cat("Test (MSE) for AdaBoost:", mse_adaboost, "\n") -->
+
+<!-- # TRAINING MSE for AdaBoost -->
+<!-- y_train_pred_adaboost <- predict(adaboost_model, newdata = train[, c(categorical_vars, continuous_vars)])$class -->
+<!-- mse_train_adaboost <- mean((y - y_train_pred_adaboost)^2) -->
+<!-- cat("Training MSE for AdaBoost:", mse_train_adaboost, "\n") -->
+
+<!-- # Calculate Training R² for AdaBoost -->
+<!-- st_train_adaboost <- sum((y - mean(y))^2)  # Total Sum of Squares for training -->
+<!-- rss_train_adaboost <- sum((y - y_train_pred_adaboost)^2)  # Residual Sum of Squares for training -->
+<!-- rsq_train_adaboost <- 1 - (rss_train_adaboost / st_train_adaboost)  # Correct formula for R² -->
+
+<!-- cat("Training R² for AdaBoost:", rsq_train_adaboost, "\n") -->
+
+<!-- # Calculate R-squared (R²) for Test Set -->
+<!-- sst_test_adaboost <- sum((y_actual - mean(y_actual))^2)  # Total Sum of Squares for test -->
+<!-- rss_test_adaboost <- sum((y_actual - y_pred_adaboost)^2)  # Residual Sum of Squares -->
+<!-- rsq_test_adaboost <- 1 - (rss_test_adaboost / sst_test_adaboost)  # Corrected R² -->
+
+<!-- cat("Test R-squared (R²) for AdaBoost:", rsq_test_adaboost, "\n") -->
+
+<!-- # Plot Predicted vs Actual for AdaBoost -->
+<!-- plot(y_actual, y_pred_adaboost, main = "Predicted vs Actual (AdaBoost)",  -->
+<!--      xlab = "Actual Price", ylab = "Predicted Price",  -->
+<!--      pch = 19, col = "blue") -->
+<!-- abline(0, 1, col = "red")  # Add a reference line for perfect predictions -->
+
+
+<!-- ``` -->
+
+ 

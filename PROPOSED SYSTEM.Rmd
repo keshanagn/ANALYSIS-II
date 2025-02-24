@@ -1,0 +1,446 @@
+---
+title: "Classification"
+author: "Keshana Nishshanka,Dinithi Gunarathna,Kavindu Jayawardana"
+date: "2025-02-22"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r}
+
+library(readr)
+train_RFIMPUTED <- read_csv("train_RFIMPUTED.csv")
+test_RFIMPUTED <- read_csv("test_RFIMPUTED.csv")
+
+
+
+```
+
+```{r}
+train_RFIMPUTED$bedrooms <- as.factor(train_RFIMPUTED$bedrooms)
+train_RFIMPUTED$bathrooms <- as.factor(train_RFIMPUTED$bathrooms)
+train_RFIMPUTED$floors <- as.factor(train_RFIMPUTED$floors)
+train_RFIMPUTED$waterfront <- as.factor(train_RFIMPUTED$waterfront)
+train_RFIMPUTED$view <- as.factor(train_RFIMPUTED$view)
+train_RFIMPUTED$condition <- as.factor(train_RFIMPUTED$condition)
+train_RFIMPUTED$city <- as.factor(train_RFIMPUTED$city)
+train_RFIMPUTED$monthHS <- as.factor(train_RFIMPUTED$monthHS)
+train_RFIMPUTED$dayHS <- as.factor(train_RFIMPUTED$dayHS)
+train_RFIMPUTED$sqft_basement_Categorized <- as.factor(train_RFIMPUTED$sqft_basement_Categorized)
+train_RFIMPUTED$statezip <- as.factor(train_RFIMPUTED$statezip)
+
+test_RFIMPUTED$bedrooms <- as.factor(test_RFIMPUTED$bedrooms)
+test_RFIMPUTED$bathrooms <- as.factor(test_RFIMPUTED$bathrooms)
+test_RFIMPUTED$floors <- as.factor(test_RFIMPUTED$floors)
+test_RFIMPUTED$waterfront <- as.factor(test_RFIMPUTED$waterfront)
+test_RFIMPUTED$view <- as.factor(test_RFIMPUTED$view)
+test_RFIMPUTED$condition <- as.factor(test_RFIMPUTED$condition)
+test_RFIMPUTED$city <- as.factor(test_RFIMPUTED$city)
+test_RFIMPUTED$monthHS <- as.factor(test_RFIMPUTED$monthHS)
+test_RFIMPUTED$dayHS <- as.factor(test_RFIMPUTED$dayHS)
+test_RFIMPUTED$sqft_basement_Categorized <- as.factor(test_RFIMPUTED$sqft_basement_Categorized)
+test_RFIMPUTED$statezip <- as.factor(test_RFIMPUTED$statezip)
+
+```
+
+```{r}
+```
+
+
+```{r}
+train_RFIMPUTED$price_category <- cut(train_RFIMPUTED$price, 
+                                      breaks = c(0,300000, 500000, 1000000000), 
+                                      labels = c("Mid", "High", "Luxury"),
+                                      right = FALSE)  # Exclude the upper bound from each bin
+
+test_RFIMPUTED$price_category <- cut(test_RFIMPUTED$price, 
+                                      breaks = c(0,300000, 500000, 1000000000), 
+                                      labels = c("Mid", "High", "Luxury"),
+                                      right = FALSE)  # Exclude the upper bound from each bin
+train_RFIMPUTED$price <- NULL
+test_RFIMPUTED$price  <- NULL
+
+test_RFIMPUTED$price_category <- as.factor(test_RFIMPUTED$price_category)
+train_RFIMPUTED$price_category <- as.factor(train_RFIMPUTED$price_category)
+```
+
+
+```{r}
+```
+
+### CHECK TO ENSURE THE CATEGORICAL LEVELS ARE SAME FOR TEST AND TRAIN SETS
+```{r}
+library(dplyr)
+
+# Select categorical variables from both train and test sets
+categorical_vars_train <- train_RFIMPUTED %>% select(where(is.factor))
+categorical_vars_test <- test_RFIMPUTED %>% select(where(is.factor))
+
+# Function to check missing levels
+check_missing_levels <- function(train_var, test_var, var_name) {
+  train_levels <- levels(train_var)
+  test_levels <- levels(test_var)
+  
+  # Levels in train but not in test
+  missing_in_test <- setdiff(train_levels, test_levels)
+  missing_in_test_counts <- table(train_var[train_var %in% missing_in_test])
+  
+  # Levels in test but not in train
+  missing_in_train <- setdiff(test_levels, train_levels)
+  missing_in_train_counts <- table(test_var[test_var %in% missing_in_train])
+  
+  # Print results directly in console
+  cat("\n============================================\n")
+  cat("Variable:", var_name, "\n")
+  
+  if (length(missing_in_test) > 0) {
+    cat("⚠️ Levels in Train but Missing in Test:\n")
+    print(missing_in_test_counts)
+  } else {
+    cat("✅ No missing levels from Train in Test.\n")
+  }
+  
+  if (length(missing_in_train) > 0) {
+    cat("⚠️ Levels in Test but Missing in Train:\n")
+    print(missing_in_train_counts)
+  } else {
+    cat("✅ No missing levels from Test in Train.\n")
+  }
+}
+
+# Apply function to each categorical variable
+for (col in intersect(names(categorical_vars_train), names(categorical_vars_test))) {
+  check_missing_levels(categorical_vars_train[[col]], categorical_vars_test[[col]], col)
+}
+
+```
+
+
+```{r}
+# Load required libraries
+library(dplyr)
+
+# Function to analyze variable types
+analyze_variable_types <- function(data, dataset_name) {
+  # Get variable types
+  var_types <- sapply(data, class)
+  
+  # Count numeric variables (includes integer and numeric)
+  numeric_vars <- sum(var_types %in% c("numeric", "integer"))
+  
+  # Count categorical variables (includes factor and character)
+  categorical_vars <- sum(var_types %in% c("factor", "character"))
+  
+  # Create detailed breakdown
+  var_summary <- data.frame(
+    Variable = names(var_types),
+    Type = var_types,
+    stringsAsFactors = FALSE
+  )
+  
+  # Print results
+  cat("\nAnalysis for", dataset_name, ":\n")
+  cat("Number of numeric variables:", numeric_vars, "\n")
+  cat("Number of categorical variables:", categorical_vars, "\n")
+  cat("\nDetailed breakdown:\n")
+  print(var_summary)
+  
+  # Return the summary for further use if needed
+  return(list(
+    numeric_count = numeric_vars,
+    categorical_count = categorical_vars,
+    detailed_summary = var_summary
+  ))
+}
+
+# Read the datasets
+train_data <- train_RFIMPUTED
+test_data <- test_RFIMPUTED
+
+# Analyze train dataset
+train_analysis <- analyze_variable_types(train_data, "Training Dataset")
+
+# Analyze test dataset
+test_analysis <- analyze_variable_types(test_data, "Test Dataset")
+
+# Compare variable types between datasets
+cat("\nComparison of variable types between datasets:\n")
+comparison <- data.frame(
+  Variable = names(train_data),
+  Train_Type = sapply(train_data, class),
+  Test_Type = sapply(test_data, class)
+)
+print(comparison)
+
+# Check for any mismatches in variable types between train and test
+mismatches <- comparison[comparison$Train_Type != comparison$Test_Type, ]
+if(nrow(mismatches) > 0) {
+  cat("\nWarning: Variable type mismatches found:\n")
+  print(mismatches)
+}
+```
+
+
+```{r}
+# Load required libraries
+library(randomForest)
+library(caret)
+library(pROC)
+library(dplyr)
+
+# Read the datasets
+# train_data <- read.csv("train_Class.csv", stringsAsFactors = FALSE)
+# test_data <- read.csv("test_Class.csv", stringsAsFactors = FALSE)
+
+# train_data <- read.csv("train_RFIMPUTED.csv", stringsAsFactors = FALSE)
+# test_data <- read.csv("test_RFIMPUTED.csv", stringsAsFactors = FALSE)
+
+train_data <- train_RFIMPUTED
+test_data  <- test_RFIMPUTED
+
+train_data$statezip <- NULL
+test_data$statezip <- NULL
+
+# First convert variables to factors in train_data
+train_data$bedrooms <- as.factor(train_data$bedrooms)
+train_data$bathrooms <- as.factor(train_data$bathrooms)
+train_data$floors <- as.factor(train_data$floors)
+train_data$waterfront <- as.factor(train_data$waterfront)
+train_data$view <- as.factor(train_data$view)
+train_data$condition <- as.factor(train_data$condition)
+train_data$city <- as.factor(train_data$city)
+train_data$monthHS <- as.factor(train_data$monthHS)
+train_data$dayHS <- as.factor(train_data$dayHS)
+train_data$sqft_basement_Categorized <- as.factor(train_data$sqft_basement_Categorized)
+train_data$price_category <- as.factor(train_data$price_category)
+
+# Store the levels of each factor from training data
+factor_levels <- list()
+factor_columns <- names(train_data)[sapply(train_data, is.factor)]
+for(col in factor_columns) {
+    factor_levels[[col]] <- levels(train_data[[col]])
+}
+
+# Convert variables in test data using the same levels as training data
+test_data$bedrooms <- factor(test_data$bedrooms, levels = factor_levels$bedrooms)
+test_data$bathrooms <- factor(test_data$bathrooms, levels = factor_levels$bathrooms)
+test_data$floors <- factor(test_data$floors, levels = factor_levels$floors)
+test_data$waterfront <- factor(test_data$waterfront, levels = factor_levels$waterfront)
+test_data$view <- factor(test_data$view, levels = factor_levels$view)
+test_data$condition <- factor(test_data$condition, levels = factor_levels$condition)
+test_data$city <- factor(test_data$city, levels = factor_levels$city)
+test_data$monthHS <- factor(test_data$monthHS, levels = factor_levels$monthHS)
+test_data$dayHS <- factor(test_data$dayHS, levels = factor_levels$dayHS)
+test_data$sqft_basement_Categorized <- factor(test_data$sqft_basement_Categorized, 
+                                            levels = factor_levels$sqft_basement_Categorized)
+test_data$price_category <- factor(test_data$price_category, levels = factor_levels$price_category)
+
+# write.csv(test_data,"ts.csv",row.names = FALSE)
+
+```
+
+
+```{r}
+library(randomForest)
+library(xgboost)
+library(dplyr)
+##Recommending Best House 
+
+# Train Random Forest Model
+set.seed(1125000)
+rf_model <- randomForest(
+    formula = price_category ~ .,
+    data = train_data,
+    ntree = 500,
+    mtry = sqrt(ncol(train_data)-1),
+    importance = TRUE
+)
+
+# Make predictions on the test set
+predictions_prob <- predict(rf_model, test_data, type = "prob")   # Get probabilities
+predictions_class <- predict(rf_model, test_data, type = "class") # Get predicted classes
+
+# XGBoost Model Preparation
+train_matrix <- model.matrix(price_category ~ . - 1, data = train_data)
+test_matrix <- model.matrix(price_category ~ . - 1, data = test_data)
+train_labels <- as.numeric(train_data$price_category) - 1  
+test_labels <- as.numeric(test_data$price_category) - 1
+
+dtrain <- xgb.DMatrix(data = train_matrix, label = train_labels)
+dtest <- xgb.DMatrix(data = test_matrix, label = test_labels)
+
+# XGBoost Model Parameters
+params <- list(
+    objective = "multi:softmax",  
+    eval_metric = "merror",
+    max_depth = 6,
+    eta = 0.1,
+    num_class = 3  
+)
+
+# Train XGBoost Model
+xgb_model <- xgb.train(params = params, data = dtrain, nrounds = 100)
+
+# Model Evaluation
+train_preds_rf <- predict(rf_model, train_data)
+test_preds_rf <- predict(rf_model, test_data)
+
+train_preds_xgb <- predict(xgb_model, dtrain)
+test_preds_xgb <- predict(xgb_model, dtest)
+
+# Convert XGBoost predictions back to factor labels
+test_preds_xgb <- factor(test_preds_xgb, levels = 0:2, labels = levels(train_data$price_category))
+
+# Confusion Matrices
+confusion_matrix_rf <- table(test_data$price_category, test_preds_rf)
+confusion_matrix_xgb <- table(test_data$price_category, test_preds_xgb)
+
+# Accuracy Calculation
+accuracy_rf <- sum(diag(confusion_matrix_rf)) / sum(confusion_matrix_rf)
+accuracy_xgb <- sum(diag(confusion_matrix_xgb)) / sum(confusion_matrix_xgb)
+
+# Print results
+cat("Random Forest Accuracy - Test:", accuracy_rf, "\n")
+cat("XGBoost Accuracy - Test:", accuracy_xgb, "\n")
+
+## Recommendation System
+generate_score <- function(df, category, bedrooms, bathrooms, floors) {
+  # Convert inputs to factors to match dataset
+  bedrooms <- as.factor(bedrooms)
+  bathrooms <- as.factor(bathrooms)
+  floors <- as.factor(floors)
+
+  # Filter the dataset based on all user criteria
+  df_filtered <- df %>%
+    filter(price_category == category & 
+           bedrooms == bedrooms & 
+           bathrooms == bathrooms & 
+           floors == floors)
+
+  # If no houses match, return a message
+  if (nrow(df_filtered) == 0) {
+    return("No houses match the criteria.")
+  }
+
+  # Apply scoring based on the price category
+  df_filtered <- df_filtered %>%
+    mutate(score = case_when(
+      category == "Mid" ~ sqft_living * 0.4 + as.numeric(condition) * 0.3 + as.numeric(sqft_basement_Categorized) * 0.3,
+      category == "High" ~ sqft_living * 0.3 + as.numeric(condition) * 0.3 + as.numeric(view) * 0.4,
+      category == "Luxury" ~ sqft_living * 0.2 + as.numeric(condition) * 0.2 + as.numeric(waterfront) * 0.3 + as.numeric(view) * 0.3,
+      TRUE ~ 0
+    ))
+
+  # Return the house with the highest score
+  return(df_filtered %>% arrange(desc(score)) %>% head(1))
+}
+
+# Example Usage
+user_input <- list(category = "High", bedrooms = "5", bathrooms = "2.5", floors = "2")
+best_house <- generate_score(train_data, user_input$category, user_input$bedrooms, user_input$bathrooms, user_input$floors)
+
+print(best_house)
+
+```
+
+```{r}
+library(randomForest)
+library(xgboost)
+library(dplyr)
+
+## Function to Recommend the Best House Using ML Models + Scoring System
+recommend_best_house <- function(model_rf, model_xgb, df, category, bedrooms, bathrooms, floors) {
+  
+  # Filter Houses Based on User Criteria
+  filtered_df <- df %>%
+    filter(price_category == category,
+           bedrooms == as.factor(bedrooms),
+           bathrooms == as.factor(bathrooms),
+           floors == as.factor(floors))
+  
+  # Check if any houses match criteria
+  if (nrow(filtered_df) == 0) {
+    return("No houses match the criteria.")
+  }
+  
+  # Make Predictions Using Random Forest
+  rf_probs <- predict(model_rf, filtered_df, type = "prob")[, category]
+  
+  # Prepare Data for XGBoost (Ensure same structure as training)
+  test_matrix <- model.matrix(price_category ~ . - 1, data = filtered_df)
+  dtest <- xgb.DMatrix(data = test_matrix)
+  
+  # Make Predictions Using XGBoost
+  xgb_probs <- predict(model_xgb, dtest)
+
+  # If the result is a vector (instead of a probability matrix), reshape it
+  if (is.vector(xgb_probs)) {
+    # Reshape to a matrix if applicable
+    xgb_probs <- matrix(xgb_probs, ncol = length(unique(df$price_category)), byrow = TRUE)
+  }
+
+  # Convert to Data Frame for Safe Indexing
+  xgb_probs_df <- data.frame(xgb_probs)
+
+  # Check and set column names (ensure they align with your categories)
+  categories <- unique(df$price_category)
+  colnames(xgb_probs_df) <- categories  # Set proper column names from the original categories
+
+  # Extract the probability for the selected category
+  if (category %in% colnames(xgb_probs_df)) {
+    xgb_probs_final <- xgb_probs_df[, category]
+  } else {
+    stop(paste("Column", category, "does not exist in xgb_probs_df"))
+  }
+  
+  # Define Custom Scoring System Based on Category
+  if (category == "Mid") {
+    filtered_df$custom_score <- filtered_df$sqft_living * 0.4 + 
+                                filtered_df$condition * 0.3 + 
+                                filtered_df$sqft_basement * 0.3
+  } else if (category == "High") {
+    filtered_df$custom_score <- filtered_df$sqft_living * 0.3 + 
+                                filtered_df$condition * 0.3 + 
+                                filtered_df$view * 0.4
+  } else {  # Luxury Category
+    filtered_df$custom_score <- filtered_df$sqft_living * 0.2 + 
+                                filtered_df$condition * 0.2 + 
+                                filtered_df$waterfront * 0.3 + 
+                                filtered_df$view * 0.3
+  }
+  
+  # Normalize Custom Scores (Min-Max Scaling)
+  min_score <- min(filtered_df$custom_score, na.rm = TRUE)
+  max_score <- max(filtered_df$custom_score, na.rm = TRUE)
+  filtered_df$custom_score <- (filtered_df$custom_score - min_score) / (max_score - min_score)
+  
+  # Combine ML Predictions & Custom Scoring System
+  final_scores <- (rf_probs + xgb_probs_final + filtered_df$custom_score) / 3
+  filtered_df$final_score <- final_scores
+  
+  # Select the House with the Highest Score
+  best_house <- filtered_df %>%
+    arrange(desc(final_score)) %>%
+    head(1)
+  
+  return(best_house)
+}
+
+## Example Usage
+user_input <- list(category = "High", bedrooms = 3, bathrooms = 1.5, floors = 1)
+best_house <- recommend_best_house(rf_model, xgb_model, test_data, 
+                                   user_input$category, user_input$bedrooms, 
+                                   user_input$bathrooms, user_input$floors)
+
+print(best_house)
+```
+
