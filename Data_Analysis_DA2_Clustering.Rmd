@@ -1,0 +1,318 @@
+---
+title: "Data_Analysis_2"
+author: "Keshana Nishshanka,Dinithi Gunarathna,Kavindu Jayawardana"
+date: "2025-02-16"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r data loading}
+library(readr)
+train_RFIMPUTED <- read_csv("train_RFIMPUTED.csv")
+test_RFIMPUTED <- read_csv("test_RFIMPUTED.csv")
+
+
+```
+```{r}
+train_RFIMPUTED$bedrooms <- as.factor(train_RFIMPUTED$bedrooms)
+train_RFIMPUTED$bathrooms <- as.factor(train_RFIMPUTED$bathrooms)
+train_RFIMPUTED$floors <- as.factor(train_RFIMPUTED$floors)
+train_RFIMPUTED$waterfront <- as.factor(train_RFIMPUTED$waterfront)
+train_RFIMPUTED$view <- as.factor(train_RFIMPUTED$view)
+train_RFIMPUTED$condition <- as.factor(train_RFIMPUTED$condition)
+train_RFIMPUTED$city <- as.factor(train_RFIMPUTED$city)
+train_RFIMPUTED$monthHS <- as.factor(train_RFIMPUTED$monthHS)
+train_RFIMPUTED$dayHS <- as.factor(train_RFIMPUTED$dayHS)
+train_RFIMPUTED$sqft_basement_Categorized <- as.factor(train_RFIMPUTED$sqft_basement_Categorized)
+train_RFIMPUTED$statezip <- as.factor(train_RFIMPUTED$statezip)
+
+test_RFIMPUTED$bedrooms <- as.factor(test_RFIMPUTED$bedrooms)
+test_RFIMPUTED$bathrooms <- as.factor(test_RFIMPUTED$bathrooms)
+test_RFIMPUTED$floors <- as.factor(test_RFIMPUTED$floors)
+test_RFIMPUTED$waterfront <- as.factor(test_RFIMPUTED$waterfront)
+test_RFIMPUTED$view <- as.factor(test_RFIMPUTED$view)
+test_RFIMPUTED$condition <- as.factor(test_RFIMPUTED$condition)
+test_RFIMPUTED$city <- as.factor(test_RFIMPUTED$city)
+test_RFIMPUTED$monthHS <- as.factor(test_RFIMPUTED$monthHS)
+test_RFIMPUTED$dayHS <- as.factor(test_RFIMPUTED$dayHS)
+test_RFIMPUTED$sqft_basement_Categorized <- as.factor(test_RFIMPUTED$sqft_basement_Categorized)
+test_RFIMPUTED$statezip <- as.factor(test_RFIMPUTED$statezip)
+
+```
+
+### IF WANT CATEGORIZATION OF PRICE VARIABLE
+```{r}
+train_RFIMPUTED$price_category <- cut(train_RFIMPUTED$price, 
+                                      breaks = c(-Inf, 150000, 300000, 500000, Inf), 
+                                      labels = c("Low", "Mid", "High", "Luxury"),
+                                      right = FALSE)  # Exclude the upper bound from each bin
+
+test_RFIMPUTED$price_category <- cut(test_RFIMPUTED$price, 
+                                      breaks = c(-Inf, 150000, 300000, 500000, Inf), 
+                                      labels = c("Low", "Mid", "High", "Luxury"),
+                                      right = FALSE)  # Exclude the upper bound from each bin
+train_RFIMPUTED$price <- NULL
+test_RFIMPUTED$price  <- NULL
+
+test_RFIMPUTED$price_category <- as.factor(test_RFIMPUTED$price_category)
+train_RFIMPUTED$price_category <- as.factor(train_RFIMPUTED$price_category)
+
+#write.csv(train_RFIMPUTED,"train_Cat.csv",row.names = FALSE)
+#write.csv(test_RFIMPUTED,"test_Cat.csv",row.names = FALSE)
+```
+
+### REMOVAL 
+```{r}
+train_RFIMPUTED$sqft_basement_Categorized <- NULL
+test_RFIMPUTED$sqft_basement_Categorized <- NULL
+```
+
+### CHECK TO ENSURE THE CATEGORICAL LEVELS ARE SAME FOR TEST AND TRAIN SETS
+```{r}
+library(dplyr)
+
+# Select categorical variables from both train and test sets
+categorical_vars_train <- train_RFIMPUTED %>% select(where(is.factor))
+categorical_vars_test <- test_RFIMPUTED %>% select(where(is.factor))
+
+# Function to check missing levels
+check_missing_levels <- function(train_var, test_var, var_name) {
+  train_levels <- levels(train_var)
+  test_levels <- levels(test_var)
+  
+  # Levels in train but not in test
+  missing_in_test <- setdiff(train_levels, test_levels)
+  missing_in_test_counts <- table(train_var[train_var %in% missing_in_test])
+  
+  # Levels in test but not in train
+  missing_in_train <- setdiff(test_levels, train_levels)
+  missing_in_train_counts <- table(test_var[test_var %in% missing_in_train])
+  
+  # Print results directly in console
+  cat("\n============================================\n")
+  cat("Variable:", var_name, "\n")
+  
+  if (length(missing_in_test) > 0) {
+    cat("⚠️ Levels in Train but Missing in Test:\n")
+    print(missing_in_test_counts)
+  } else {
+    cat("✅ No missing levels from Train in Test.\n")
+  }
+  
+  if (length(missing_in_train) > 0) {
+    cat("⚠️ Levels in Test but Missing in Train:\n")
+    print(missing_in_train_counts)
+  } else {
+    cat("✅ No missing levels from Test in Train.\n")
+  }
+}
+
+# Apply function to each categorical variable
+for (col in intersect(names(categorical_vars_train), names(categorical_vars_test))) {
+  check_missing_levels(categorical_vars_train[[col]], categorical_vars_test[[col]], col)
+}
+
+```
+
+CLUSTER ANALYSIS USING K MEANS CLUSTERING AND SILHOUTTE'S SCORE
+```{r}
+
+
+
+# Load required libraries
+library(cluster)
+library(factoextra)
+library(dplyr)
+
+# Prepare the dataset (train_RFIMPUTED) - Exclude target variable
+train_data <- train_RFIMPUTED %>% select(-price_category)  
+
+# Compute Gower's distance
+gower_dist <- daisy(train_data, metric = "gower")
+
+# Perform clustering using PAM (Partitioning Around Medoids)
+k <- 2  # Choose number of clusters
+pam_clusters <- pam(gower_dist, k)
+
+# Compute silhouette scores
+sil <- silhouette(pam_clusters$clustering, gower_dist)
+
+# Convert silhouette scores to a dataframe
+sil_df <- data.frame(Cluster = sil[,1], Silhouette_Width = sil[,3])
+
+# Print individual silhouette scores
+print(sil_df)
+
+# Plot silhouette analysis without the average score
+fviz_silhouette(sil) + theme_minimal() + ggtitle("Silhouette Plot (Individual Scores)")
+
+
+```
+
+```{r}
+# Load required libraries
+library(cluster)
+library(factoextra)
+library(dplyr)
+
+# Prepare the dataset (numeric columns only, excluding target variable)
+train_data <- train_RFIMPUTED %>%
+  select(where(is.numeric)) 
+
+# Compute Euclidean distance (since all are numeric)
+dist_matrix <- daisy(train_data, metric = "euclidean") 
+
+# Function to compute silhouette score for different k values
+compute_silhouette <- function(k) {
+  pam_clusters <- pam(dist_matrix, k)
+  sil <- silhouette(pam_clusters$clustering, dist_matrix)
+  mean(sil[, 3])  # Return average silhouette width
+}
+
+# Set range of k values to test
+k_values <- 2:10  # You can modify this range as needed
+sil_scores <- sapply(k_values, compute_silhouette)
+
+# Find best k (maximum average silhouette score)
+best_k <- k_values[which.max(sil_scores)]
+cat("Optimal k based on silhouette score:", best_k, "\n")
+
+# Perform final clustering using best k
+final_pam <- pam(dist_matrix, best_k)
+
+# Compute silhouette scores for final model
+final_sil <- silhouette(final_pam$clustering, dist_matrix)
+
+# Convert to dataframe for display
+sil_df <- data.frame(Cluster = final_sil[,1], Silhouette_Width = final_sil[,3])
+print(sil_df)
+
+# Plot silhouette scores
+fviz_silhouette(final_sil) + theme_minimal() + ggtitle(paste("Silhouette Plot (Best k =", best_k, ")"))
+
+
+```
+
+```{r}
+hclust_res <- hclust(dist(train_data), method = "ward.D2")
+plot(hclust_res)
+rect.hclust(hclust_res, k = 2, border = "red")
+
+
+library(dbscan)
+library(cluster)
+library(factoextra)
+
+# Use only numeric features for DBSCAN
+train_data_numeric <- train_data[, sapply(train_data, is.numeric)]
+
+# Standardize numeric data (DBSCAN is sensitive to scale)
+train_data_scaled <- scale(train_data_numeric)
+
+# Run DBSCAN (Try different values of eps)
+dbscan_res <- dbscan(train_data_scaled, eps = 0.5, minPts = 10)
+
+# Check cluster assignments
+print(table(dbscan_res$cluster))
+
+# Compute silhouette score only for points not classified as noise (0)
+silhouette_res <- silhouette(dbscan_res$cluster, dist(train_data_scaled))
+
+# Plot Silhouette Scores
+fviz_silhouette(silhouette_res)
+
+# Compute k-nearest neighbor distances (for k = minPts)
+kNN_dist <- kNNdist(train_data_scaled, k = 5)
+
+# Plot distances
+plot(sort(kNN_dist), type = "l", main = "k-NN Distance Plot", xlab = "Points sorted", ylab = "Distance")
+abline(h = 0.5, col = "red")  # Adjust threshold manually
+
+fviz_cluster(list(data = train_data_scaled, cluster = dbscan_res$cluster))
+
+```
+
+### 
+
+```{r}
+# Load required package
+library(zipcodeR)
+
+# Ensure ZIP codes are in character format (zipcodeR requires character)
+train_RFIMPUTED$statezip <- gsub("[^0-9]", "", train_RFIMPUTED$statezip)  # Remove non-numeric characters
+train_RFIMPUTED$statezip <- as.character(train_RFIMPUTED$statezip)  # Convert to character
+
+# Function to get lat/lon for each ZIP code safely
+get_lat_lon <- function(zip) {
+  zip_info <- reverse_zipcode(zip)  # Use zipcodeR function to get location info
+  
+  if (!is.null(zip_info) && !is.na(zip_info$lat) && !is.na(zip_info$lng)) {
+    return(data.frame(latitude = zip_info$lat, longitude = zip_info$lng))
+  } else {
+    return(data.frame(latitude = NA, longitude = NA))  # Return NA if ZIP not found
+  }
+}
+
+# Apply function safely using lapply()
+coords_list <- lapply(train_RFIMPUTED$statezip, function(zip) {
+  tryCatch(get_lat_lon(zip), error = function(e) data.frame(latitude = NA, longitude = NA))
+})
+
+# Combine results into a data frame
+coords_df <- do.call(rbind, coords_list)
+
+# Add coordinates to dataset
+train_RFIMPUTED <- cbind(train_RFIMPUTED, coords_df)
+
+# Print first few rows to check
+head(train_RFIMPUTED[, c("statezip", "latitude", "longitude")])
+
+
+
+
+```
+
+```{r}
+
+library(FactoMineR)
+library(factoextra)
+library(cluster)
+library(dplyr)
+
+train_RFIMPUTED.K <- train_RFIMPUTED %>% select(-price)
+# Run FAMD on the dataset (mixed numeric + categorical)
+famd_res <- FAMD(train_RFIMPUTED.K, ncp = 4, graph = FALSE)  # ncp = Number of components to keep
+
+# Get factor scores
+factor_scores <- famd_res$var$coord
+
+set.seed(123)
+kmeans_res <- kmeans(factor_scores, centers = 5)  # Change 2 based on silhouette analysis
+#train_data$cluster_kmeans <- kmeans_res$cluster
+
+
+
+# Visualize clusters
+fviz_cluster(kmeans_res, data = factor_scores)
+
+silhouette_res <- silhouette(kmeans_res$cluster, dist(factor_scores))
+plot(silhouette_res)
+
+factor_ <- famd_res$var
+factor_
+# dbscan_res <- dbscan(factor_scores, eps = 0.5, minPts = 5)
+# train_data$cluster_dbscan <- dbscan_res$cluster
+# 
+# # Visualize clusters
+# fviz_cluster(list(data = factor_scores, cluster = dbscan_res$cluster))
+
+fviz_screeplot(famd_res, addlabels = TRUE, ylim = c(0, 50))
+
+```
+
+

@@ -1,0 +1,129 @@
+```{r}
+
+library(readr)
+train_RFIMPUTED_GPA <- read_csv("train_RFIMPUTED.csv")
+test_RFIMPUTED_GPA <- read_csv("test_RFIMPUTED.csv")
+
+```
+### ALTITUDE AND LATITUDE GENERATION
+```{r}
+library(dplyr)
+library(zipcodeR)
+
+
+
+# Ensure ZIP codes are character type
+train_RFIMPUTED_GPA$statezip <- as.character(train_RFIMPUTED_GPA$statezip)
+test_RFIMPUTED_GPA$statezip <- as.character(test_RFIMPUTED_GPA$statezip)
+
+# Extract only ZIP code (last 5 digits)
+train_RFIMPUTED_GPA$statezip <- sub(".* (\\d{5})$", "\\1", train_RFIMPUTED_GPA$statezip)
+test_RFIMPUTED_GPA$statezip <- sub(".* (\\d{5})$", "\\1", test_RFIMPUTED_GPA$statezip)
+
+# Get lat/lon for each ZIP code
+zip_data_train <- reverse_zipcode(train_RFIMPUTED_GPA$statezip) %>%
+  select(zipcode, lat, lng)
+
+zip_data_test <- reverse_zipcode(test_RFIMPUTED_GPA$statezip) %>%
+  select(zipcode, lat, lng)
+
+# Merge with original dataset
+train_RFIMPUTED_GPA <- train_RFIMPUTED_GPA %>%
+  left_join(zip_data_train, by = c("statezip" = "zipcode"))
+
+test_RFIMPUTED_GPA <- test_RFIMPUTED_GPA %>%
+  left_join(zip_data_test, by = c("statezip" = "zipcode"))
+
+```
+
+```{r}
+# Load necessary libraries
+library(spgwr)
+library(sf)
+library(dplyr)
+library(ggplot2)
+
+
+# Ensure categorical variables are factors
+categorical_vars <- c("bedrooms", "bathrooms", "floors", "waterfront", "view", 
+                      "condition", "city", "monthHS", "dayHS", "sqft_basement_Categorized", "statezip")
+
+train_RFIMPUTED_GPA[categorical_vars] <- lapply(train_RFIMPUTED_GPA[categorical_vars], as.factor)
+test_RFIMPUTED_GPA[categorical_vars] <- lapply(test_RFIMPUTED_GPA[categorical_vars], as.factor)
+
+
+train_RFIMPUTED_GPA <- train_RFIMPUTED_GPA %>%
+  select(where(is.numeric)) 
+
+test_RFIMPUTED_GPA <- test_RFIMPUTED_GPA %>%
+  select(where(is.numeric))  
+
+test_RFIMPUTED_GPA$sqft_basement<- NULL
+train_RFIMPUTED_GPA$sqft_basement <- NULL
+
+train_RFIMPUTED_GPA <- train_RFIMPUTED_GPA %>% distinct(lat, lng, .keep_all = TRUE)
+
+# Convert to spatial object
+train_RFIMPUTED_sf <- st_as_sf(train_RFIMPUTED_GPA, coords = c("lng", "lat"), crs = 4326)
+
+# Extract response variable
+y <- train_RFIMPUTED_GPA$price
+
+# Select predictor variables (excluding lat/lng and price)
+X <- train_RFIMPUTED_GPA %>% select(-price, -lat, -lng)
+
+# Convert to matrix for GWR
+coords <- as.matrix(st_coordinates(train_RFIMPUTED_sf))
+
+bw <- gwr.sel(price ~ ., data = train_RFIMPUTED_GPA, coords = coords, adapt = TRUE)
+print(bw)
+
+gwr_model <- gwr(price ~ ., data = train_RFIMPUTED_GPA, coords = coords, bandwidth = bw, hatmatrix = TRUE)
+
+# Print results
+print(gwr_model)
+
+nrow(train_RFIMPUTED_GPA)
+nrow(coords)
+
+```
+
+```{r}
+# Convert GWR results to a dataframe
+gwr_results <- as.data.frame(gwr_model$SDF)
+
+# Add results back to spatial dataset
+train_RFIMPUTED_sf$GWR_sqft_living <- gwr_results$sqft_living  # Change variable name as needed
+
+# Visualize the spatial variation in coefficients
+ggplot(train_RFIMPUTED_sf) +
+  geom_sf(aes(fill = GWR_sqft_living)) +
+  scale_fill_viridis_c() +
+  labs(title = "GWR Coefficients for Sqft Living", fill = "Coefficient")
+
+
+
+
+```
+
+```{r}
+
+
+library(spdep)
+
+# Define spatial neighbors
+coords <- as.matrix(train_RFIMPUTED_GPA[, c("lng", "lat")])
+nb <- knn2nb(knearneigh(coords, k = 5))  # 5 nearest neighbors
+listw <- nb2listw(nb, style = "W")
+
+# Spatial Lag Model (SLM)
+slm_model <- lagsarlm(price ~ ., data = train_RFIMPUTED_GPA, listw = listw)
+summary(slm_model)
+
+# Spatial Error Model (SEM)
+sem_model <- errorsarlm(price ~ ., data = train_RFIMPUTED_GPA, listw = listw)
+summary(sem_model)
+
+```
+
+
