@@ -1,0 +1,751 @@
+---
+title: "Untitled"
+author: "Keshana Nishshanka,Dinithi Gunarathna,Kavindu Jayawardana"
+date: "2025-02-26"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+```{r}
+library(readr)
+train_RFIMPUTED <- read_csv("train_RFIMPUTED.csv")
+test_RFIMPUTED <- read_csv("test_RFIMPUTED.csv")
+
+train_RFIMPUTED$bedrooms <- as.factor(train_RFIMPUTED$bedrooms)
+train_RFIMPUTED$bathrooms <- as.factor(train_RFIMPUTED$bathrooms)
+train_RFIMPUTED$floors <- as.factor(train_RFIMPUTED$floors)
+train_RFIMPUTED$waterfront <- as.factor(train_RFIMPUTED$waterfront)
+train_RFIMPUTED$view <- as.factor(train_RFIMPUTED$view)
+train_RFIMPUTED$condition <- as.factor(train_RFIMPUTED$condition)
+train_RFIMPUTED$city <- as.factor(train_RFIMPUTED$city)
+train_RFIMPUTED$monthHS <- as.factor(train_RFIMPUTED$monthHS)
+train_RFIMPUTED$dayHS <- as.factor(train_RFIMPUTED$dayHS)
+train_RFIMPUTED$sqft_basement_Categorized <- as.factor(train_RFIMPUTED$sqft_basement_Categorized)
+train_RFIMPUTED$statezip <- as.factor(train_RFIMPUTED$statezip)
+
+test_RFIMPUTED$bedrooms <- as.factor(test_RFIMPUTED$bedrooms)
+test_RFIMPUTED$bathrooms <- as.factor(test_RFIMPUTED$bathrooms)
+test_RFIMPUTED$floors <- as.factor(test_RFIMPUTED$floors)
+test_RFIMPUTED$waterfront <- as.factor(test_RFIMPUTED$waterfront)
+test_RFIMPUTED$view <- as.factor(test_RFIMPUTED$view)
+test_RFIMPUTED$condition <- as.factor(test_RFIMPUTED$condition)
+test_RFIMPUTED$city <- as.factor(test_RFIMPUTED$city)
+test_RFIMPUTED$monthHS <- as.factor(test_RFIMPUTED$monthHS)
+test_RFIMPUTED$dayHS <- as.factor(test_RFIMPUTED$dayHS)
+test_RFIMPUTED$sqft_basement_Categorized <- as.factor(test_RFIMPUTED$sqft_basement_Categorized)
+test_RFIMPUTED$statezip <- as.factor(test_RFIMPUTED$statezip)
+
+train_RFIMPUTED$price_category <- cut(train_RFIMPUTED$price, 
+                                      breaks = c(0,300000, 500000, 1000000000), 
+                                      labels = c("Mid", "High", "Luxury"),
+                                      right = FALSE)  # Exclude the upper bound from each bin
+
+test_RFIMPUTED$price_category <- cut(test_RFIMPUTED$price, 
+                                      breaks = c(0,300000, 500000, 1000000000), 
+                                      labels = c("Mid", "High", "Luxury"),
+                                      right = FALSE)  # Exclude the upper bound from each bin
+train_RFIMPUTED$price <- NULL
+test_RFIMPUTED$price  <- NULL
+
+test_RFIMPUTED$price_category <- as.factor(test_RFIMPUTED$price_category)
+train_RFIMPUTED$price_category <- as.factor(train_RFIMPUTED$price_category)
+
+train_data <- train_RFIMPUTED
+test_data  <- test_RFIMPUTED
+
+train_data$statezip <- NULL
+test_data$statezip <- NULL
+
+# First convert variables to factors in train_data
+train_data$bedrooms <- as.factor(train_data$bedrooms)
+train_data$bathrooms <- as.factor(train_data$bathrooms)
+train_data$floors <- as.factor(train_data$floors)
+train_data$waterfront <- as.factor(train_data$waterfront)
+train_data$view <- as.factor(train_data$view)
+train_data$condition <- as.factor(train_data$condition)
+train_data$city <- as.factor(train_data$city)
+train_data$monthHS <- as.factor(train_data$monthHS)
+train_data$dayHS <- as.factor(train_data$dayHS)
+train_data$sqft_basement_Categorized <- as.factor(train_data$sqft_basement_Categorized)
+train_data$price_category <- as.factor(train_data$price_category)
+
+# Store the levels of each factor from training data
+factor_levels <- list()
+factor_columns <- names(train_data)[sapply(train_data, is.factor)]
+for(col in factor_columns) {
+    factor_levels[[col]] <- levels(train_data[[col]])
+}
+
+# Convert variables in test data using the same levels as training data
+test_data$bedrooms <- factor(test_data$bedrooms, levels = factor_levels$bedrooms)
+test_data$bathrooms <- factor(test_data$bathrooms, levels = factor_levels$bathrooms)
+test_data$floors <- factor(test_data$floors, levels = factor_levels$floors)
+test_data$waterfront <- factor(test_data$waterfront, levels = factor_levels$waterfront)
+test_data$view <- factor(test_data$view, levels = factor_levels$view)
+test_data$condition <- factor(test_data$condition, levels = factor_levels$condition)
+test_data$city <- factor(test_data$city, levels = factor_levels$city)
+test_data$monthHS <- factor(test_data$monthHS, levels = factor_levels$monthHS)
+test_data$dayHS <- factor(test_data$dayHS, levels = factor_levels$dayHS)
+test_data$sqft_basement_Categorized <- factor(test_data$sqft_basement_Categorized, 
+                                            levels = factor_levels$sqft_basement_Categorized)
+test_data$price_category <- factor(test_data$price_category, levels = factor_levels$price_category)
+```
+
+
+```{r}
+# Complete Example: House Recommendation System with Elastic Net and Random Forest
+# This example demonstrates the full workflow from data preparation to prediction
+
+# First, load required packages
+library(glmnet)
+library(randomForest)
+library(dplyr)
+
+
+# Function to calculate custom score based on user preferences
+calculate_custom_score <- function(df, preferences) {
+  # Initialize score vector
+  scores <- rep(0, nrow(df))
+  
+  # Process each preference and add weighted contribution
+  for (feature in names(preferences)) {
+    if (feature %in% colnames(df)) {
+      # Normalize the feature (higher is better)
+      if (feature %in% c("sqft_living", "sqft_lot", "sqft_above", "sqft_basement", "view", "condition", "waterfront")) {
+        # For these features, higher values are better
+        # For factor variables like view, condition, waterfront, we convert to numeric first
+        feature_values <- df[[feature]]
+        if (is.factor(feature_values)) {
+          feature_values <- as.numeric(as.character(feature_values))
+        }
+        
+        # Avoid division by zero
+        range <- max(feature_values, na.rm = TRUE) - min(feature_values, na.rm = TRUE)
+        if (range == 0) range <- 1
+        
+        norm_values <- (feature_values - min(feature_values, na.rm = TRUE)) / range
+      } else if (feature == "age") {
+        # For age, lower is better (newer houses)
+        age_values <- df[[feature]]
+        range <- max(age_values, na.rm = TRUE) - min(age_values, na.rm = TRUE)
+        if (range == 0) range <- 1
+        
+        norm_values <- 1 - (age_values - min(age_values, na.rm = TRUE)) / range
+      } else {
+        # Default: assume higher is better
+        feature_values <- df[[feature]]
+        if (is.factor(feature_values)) {
+          feature_values <- as.numeric(as.character(feature_values))
+        }
+        
+        range <- max(feature_values, na.rm = TRUE) - min(feature_values, na.rm = TRUE)
+        if (range == 0) range <- 1
+        
+        norm_values <- (feature_values - min(feature_values, na.rm = TRUE)) / range
+      }
+      
+      # Replace NaN with 0.5 (neutral score)
+      norm_values[is.na(norm_values)] <- 0.5
+      
+      # Add weighted contribution
+      scores <- scores + (norm_values * preferences[[feature]])
+    }
+  }
+  
+  return(scores)
+}
+
+# Function for robust normalization that handles edge cases
+robust_normalize <- function(x) {
+  if (length(unique(x)) <= 1) {
+    return(rep(0.5, length(x)))  # If all values are the same, return neutral
+  }
+  
+  # Standard min-max normalization with small epsilon to avoid division by zero
+  range <- max(x, na.rm = TRUE) - min(x, na.rm = TRUE)
+  if (range == 0) range <- 1  # Avoid division by zero
+  
+  normalized <- (x - min(x, na.rm = TRUE)) / range
+  
+  # Replace NAs with neutral value
+  normalized[is.na(normalized)] <- 0.5
+  
+  return(normalized)
+}
+
+# Process predictions function
+process_elastic_net_predictions <- function(probs, filtered_df, category, all_categories) {
+  # If probs is already a named vector with categories, return the right element
+  if (is.list(probs) && all(names(probs) %in% all_categories)) {
+    return(probs[[category]])
+  }
+  
+  # If probs is a matrix with named columns, return the right column
+  if (is.matrix(probs) && category %in% colnames(probs)) {
+    return(probs[, category])
+  }
+  
+  # Return the probability directly if it's a vector
+  return(probs)
+}
+
+# ===============================================
+# 3. Train the models
+# ===============================================
+
+# Train Random Forest Model
+set.seed(789)
+rf_model <- randomForest(
+  formula = price_category ~ .,
+  data = train_data[, !names(train_data) %in% c("id", "price")],
+  ntree = 50,  # Using 50 trees for better performance
+  mtry = 3,    # Number of variables to try at each split
+  importance = TRUE
+)
+
+# Print model information
+print(rf_model)
+print(importance(rf_model))
+
+# Prepare data for Elastic Net
+X_train <- model.matrix(~ . - price_category - 1, data = train_data)
+y_train <- train_data$price_category
+
+# Store column names for later reference
+train_matrix_colnames <- colnames(X_train)
+cat("Number of features in training matrix:", length(train_matrix_colnames), "\n")
+
+# For multiclass classification, we'll train one model per class (one-vs-rest approach)
+categories <- levels(train_data$price_category)
+n_categories <- length(categories)
+
+# Function to create response vector for each category
+create_response <- function(data, target_category) {
+  return(as.numeric(data$price_category == target_category))
+}
+
+# Initialize a list to store the Elastic Net models
+elastic_net_models <- list()
+
+# Train an Elastic Net model for each category
+for (i in 1:n_categories) {
+  category <- categories[i]
+  cat("Training Elastic Net model for category:", category, "\n")
+  
+  # Create binary response for this category (1 if this category, 0 otherwise)
+  y_binary <- create_response(train_data, category)
+  
+  # Find optimal lambda using cross-validation
+  # Alpha=0.5 for Elastic Net (mix of Ridge and Lasso)
+  cv_model <- cv.glmnet(X_train, y_binary, alpha = 0.5, family = "binomial", nfolds = 5)
+  
+  # Train the model with optimal lambda
+  model <- glmnet(X_train, y_binary, alpha = 0.5, lambda = cv_model$lambda.min, family = "binomial")
+  
+  # Store the model
+  elastic_net_models[[category]] <- list(
+    model = model,
+    lambda = cv_model$lambda.min
+  )
+}
+
+# ===============================================
+# 4. Define the recommendation function
+# ===============================================
+
+recommend_best_house <- function(model_rf, elastic_models, df, category, 
+                                bedrooms, bathrooms, floors, 
+                                preferences = NULL, 
+                                relax_criteria = TRUE,
+                                top_n = 1) {
+  
+  # Create a record for tracking if criteria were relaxed
+  criteria_relaxed <- FALSE
+  
+  # Set default preferences based on category if none provided
+  if(is.null(preferences)) {
+    if(category == "Mid") {
+      preferences <- list(sqft_living = 0.4, condition = 0.3, sqft_basement = 0.3)
+    } else if(category == "High") {
+      preferences <- list(sqft_living = 0.3, condition = 0.3, view = 0.4)
+    } else if(category == "Low") {
+      preferences <- list(sqft_living = 0.5, condition = 0.3, yr_built = 0.2)
+    } else {  # Luxury
+      preferences <- list(sqft_living = 0.2, condition = 0.2, waterfront = 0.3, view = 0.3)
+    }
+  }
+  
+  # Validate that weights sum to 1
+  if(abs(sum(unlist(preferences)) - 1) > 0.001) {
+    preferences <- lapply(preferences, function(x) x/sum(unlist(preferences)))
+    message("Preferences weights were normalized to sum to 1.")
+  }
+  
+  # Initial filtering with exact criteria
+  filtered_df <- df %>%
+    filter(price_category == category,
+           bedrooms == as.factor(bedrooms),
+           bathrooms == as.factor(bathrooms),
+           floors == as.factor(floors))
+  
+  # Apply flexible filtering if no houses match and relaxation is allowed
+  if(nrow(filtered_df) == 0 && relax_criteria) {
+    criteria_relaxed <- TRUE
+    
+    # Try without floors restriction
+    filtered_df <- df %>%
+      filter(price_category == category,
+             bedrooms == as.factor(bedrooms),
+             bathrooms == as.factor(bathrooms))
+    
+    if(nrow(filtered_df) == 0) {
+      # Try without bathrooms restriction
+      filtered_df <- df %>%
+        filter(price_category == category,
+               bedrooms == as.factor(bedrooms))
+      
+      if(nrow(filtered_df) == 0) {
+        # Try with nearby bedroom count (±1)
+        filtered_df <- df %>%
+          filter(price_category == category,
+                 as.integer(as.character(bedrooms)) %in% 
+                   (as.integer(bedrooms) - 1):(as.integer(bedrooms) + 1))
+        
+        if(nrow(filtered_df) == 0) {
+          # Last resort: just match the price category
+          filtered_df <- df %>%
+            filter(price_category == category)
+        }
+      }
+    }
+  }
+  
+  # Check if any houses match after all attempts
+  if(nrow(filtered_df) == 0) {
+    return(list(
+      status = "error",
+      message = "No houses match the criteria, even with relaxed parameters.",
+      criteria_used = list(
+        category = category,
+        bedrooms = bedrooms,
+        bathrooms = bathrooms,
+        floors = floors
+      )
+    ))
+  }
+  
+  # Feature engineering: create advanced derived features
+  filtered_df <- filtered_df %>%
+    mutate(
+      # Create meaningful ratios and combinations
+      space_efficiency = sqft_living / as.numeric(as.character(bedrooms)),
+      bathroom_ratio = as.numeric(as.character(bathrooms)) / as.numeric(as.character(bedrooms)),
+      
+      # Calculate age factor
+      # age = 2014 - yr_built  # Use 2014 as the reference year
+    )
+  
+  # Make predictions using Random Forest
+  rf_probs <- tryCatch({
+    predict(model_rf, filtered_df, type = "prob")[, category]
+  }, error = function(e) {
+    # Handle errors by returning a neutral probability
+    message("Error in Random Forest prediction: ", e$message)
+    return(rep(0.5, nrow(filtered_df)))
+  })
+  
+  # Make predictions using Elastic Net for the selected category
+  elastic_probs <- tryCatch({
+    # Get the model for this category
+    category_model <- elastic_models[[category]]$model
+    lambda_value <- elastic_models[[category]]$lambda
+    
+    # Create a matrix for prediction that matches the training matrix structure
+    # First, create a basic model matrix from filtered_df
+    prediction_matrix <- model.matrix(~ . - price_category - 1, data = filtered_df)
+    
+    # Get the feature names from the trained model (stored earlier as train_matrix_colnames)
+    feature_names <- train_matrix_colnames
+    
+    # Create a matrix with the same columns as the training matrix
+    test_matrix <- matrix(0, nrow = nrow(filtered_df), ncol = length(feature_names))
+    colnames(test_matrix) <- feature_names
+    
+    # Copy over values for columns that exist in both matrices
+    common_cols <- intersect(colnames(prediction_matrix), feature_names)
+    for (col in common_cols) {
+      test_matrix[, col] <- prediction_matrix[, col]
+    }
+    
+    # Predict probabilities for this category
+    probs <- predict(category_model, newx = test_matrix, s = lambda_value, type = "response")
+    as.vector(probs)  # Convert to vector for consistency
+  }, error = function(e) {
+    message("Error in Elastic Net prediction: ", e$message)
+    print(e)  # Print full error for debugging
+    return(rep(0.5, nrow(filtered_df)))
+  })
+  
+  # Calculate custom score based on user preferences
+  filtered_df$custom_score <- calculate_custom_score(filtered_df, preferences)
+  
+  # Normalize each component for fair comparison
+  rf_probs_norm <- robust_normalize(rf_probs)
+  elastic_probs_norm <- robust_normalize(elastic_probs)
+  custom_score_norm <- robust_normalize(filtered_df$custom_score)
+  
+  # Calculate model weights based on estimated model confidence
+  rf_weight <- 0.4
+  elastic_weight <- 0.4
+  custom_weight <- 0.2
+  
+  # Final score with weighted components
+  filtered_df$final_score <- (rf_probs_norm * rf_weight) + 
+                            (elastic_probs_norm * elastic_weight) + 
+                            (custom_score_norm * custom_weight)
+  
+  # Calculate confidence score based on agreement between models
+  score_variance <- apply(cbind(rf_probs_norm, elastic_probs_norm, custom_score_norm), 1, var)
+  confidence_scores <- 1 - pmin(score_variance * 5, 0.9)  # Scale to 0.1-1 range
+  filtered_df$confidence <- confidence_scores
+  
+  # Select the top N houses
+  top_houses <- filtered_df %>%
+    arrange(desc(final_score)) %>%
+    head(top_n)
+  
+  # Add metadata about the recommendation
+  result <- list(
+    recommendations = top_houses,
+    status = "success",
+    matches_found = nrow(filtered_df),
+    criteria_relaxed = criteria_relaxed,
+    criteria_used = list(
+      category = category,
+      bedrooms = bedrooms,
+      bathrooms = bathrooms,
+      floors = floors
+    ),
+    model_weights = list(
+      random_forest = rf_weight,
+      elastic_net = elastic_weight,
+      custom_score = custom_weight
+    )
+  )
+  
+  return(result)
+}
+
+# ===============================================
+# 5. Example usage
+# ===============================================
+
+# Example 1: Basic usage with default preferences
+cat("\n\n============= EXAMPLE 1: Basic Usage =============\n")
+user_input <- list(
+  category = "Mid",
+  bedrooms = 3,
+  bathrooms = 2,
+  floors = 2
+)
+
+result <- recommend_best_house(
+  rf_model,
+  elastic_net_models,
+  test_data,
+  user_input$category,
+  user_input$bedrooms,
+  user_input$bathrooms,
+  user_input$floors
+)
+
+# Print a summary of the recommendation
+cat("Recommendation Results:\n")
+cat("Status:", result$status, "\n")
+cat("Criteria relaxed:", result$criteria_relaxed, "\n")
+cat("Total matches found:", result$matches_found, "\n\n")
+
+if(result$status == "success") {
+  top_house <- result$recommendations[1,]
+  cat("Top House Recommendation:\n")
+  
+  cat("Area:", top_house$sqft_living, "sq ft\n")
+  cat("Bedrooms:", as.character(top_house$bedrooms), "\n")
+  cat("Bathrooms:", as.character(top_house$bathrooms), "\n")
+  cat("Floors:", as.character(top_house$floors), "\n")
+  cat("View rating:", as.character(top_house$view), "\n")
+  cat("Condition:", as.character(top_house$condition), "\n")
+  cat("Waterfront:", as.character(top_house$waterfront), "\n")
+  cat("Final score:", round(top_house$final_score, 3), "\n")
+  cat("Confidence:", round(top_house$confidence, 3), "\n")
+}
+
+# Example 2:
+cat("\n\n============= EXAMPLE 2: Custom Preferences =============\n")
+custom_preferences <- list(
+  sqft_living = 0.5,
+  view = 0.3,
+  condition = 0.2
+)
+
+custom_result <- recommend_best_house(
+  rf_model,
+  elastic_net_models,
+  test_data,
+  "Luxury",
+  4,
+  2.5,
+  2,
+  preferences = custom_preferences,
+  top_n = 3
+)
+
+# Print summary of custom recommendation
+cat("Custom Recommendation Results:\n")
+cat("Status:", custom_result$status, "\n")
+cat("Criteria relaxed:", custom_result$criteria_relaxed, "\n")
+cat("Total matches found:", custom_result$matches_found, "\n\n")
+
+if(custom_result$status == "success") {
+  cat("Top House Recommendations for Luxury category with custom preferences:\n")
+  for(i in 1:min(3, nrow(custom_result$recommendations))) {
+    house <- custom_result$recommendations[i,]
+    cat("\nHouse #", i, ":\n")
+    cat("Area:", house$sqft_living, "sq ft\n")
+    cat("Bedrooms:", as.character(house$bedrooms), "\n")
+    cat("Bathrooms:", as.character(house$bathrooms), "\n")
+    cat("Floors:", as.character(house$floors), "\n")
+    cat("View rating:", as.character(house$view), "\n")
+    cat("Final score:", round(house$final_score, 3), "\n")
+  }
+}
+
+# Example 3: Handling a case where criteria need to be relaxed
+cat("\n\n============= EXAMPLE 3: Relaxed Criteria =============\n")
+edge_case_result <- recommend_best_house(
+  rf_model,
+  elastic_net_models,
+  test_data,
+  "Luxury",  # Luxury houses are rarer in our dataset
+  6,         # Very specific requirement (6 bedrooms)
+  3.5,       # Specific bathroom requirement
+  3,         # Three floors
+  preferences = NULL,  # Use default preferences
+  relax_criteria = TRUE  # Allow criteria relaxation
+)
+
+# Print summary of edge case recommendation
+cat("Edge Case Recommendation Results:\n")
+cat("Status:", edge_case_result$status, "\n")
+cat("Criteria relaxed:", edge_case_result$criteria_relaxed, "\n")
+cat("Total matches found:", edge_case_result$matches_found, "\n\n")
+
+if(edge_case_result$status == "success") {
+  top_house <- edge_case_result$recommendations[1,]
+  cat("Top House Recommendation:\n")
+  cat("Area:", top_house$sqft_living, "sq ft\n")
+  cat("Bedrooms:", as.character(top_house$bedrooms), "\n")  # Might be different from 6 if relaxed
+  cat("Bathrooms:", as.character(top_house$bathrooms), "\n")  # Might be different from 3.5 if relaxed
+  cat("Floors:", as.character(top_house$floors), "\n")  # Might be different from 3 if relaxed
+  cat("Final score:", round(top_house$final_score, 3), "\n")
+  
+  cat("\nNote on criteria relaxation: ")
+  if(as.character(top_house$bedrooms) != "6") {
+    cat("Bedroom criteria was relaxed from 6 to", as.character(top_house$bedrooms), "\n")
+  }
+  if(as.character(top_house$bathrooms) != "3.5") {
+    cat("Bathroom criteria was relaxed from 3.5 to", as.character(top_house$bathrooms), "\n")
+  }
+  if(as.character(top_house$floors) != "3") {
+    cat("Floor criteria was relaxed from 3 to", as.character(top_house$floors), "\n")
+  }
+}
+```
+```{r}
+# Random Forest Predictions (Classification)
+rf_train_preds <- predict(rf_model, train_data, type = "class")
+rf_test_preds <- predict(rf_model, test_data, type = "class")
+
+# Accuracy for train set
+train_accuracy <- mean(rf_train_preds == train_data$price_category)
+
+# Accuracy for test set
+test_accuracy <- mean(rf_test_preds == test_data$price_category)
+
+cat("Random Forest Train Accuracy:", train_accuracy, "\n")
+cat("Random Forest Test Accuracy:", test_accuracy, "\n")
+
+```
+
+```{r}
+
+# Function to calculate R-squared for elastic net models
+calculate_rsquared <- function(elastic_models, X_data, y_data_categories, categories) {
+  # Initialize results data frame
+  rsquared_results <- data.frame(
+    Category = character(),
+    R_squared = numeric(),
+    stringsAsFactors = FALSE
+  )
+  
+  # For each category model
+  for (category in categories) {
+    # Get the model for this category
+    category_model <- elastic_models[[category]]$model
+    lambda_value <- elastic_models[[category]]$lambda
+    
+    # Create binary response for this category (1 if this category, 0 otherwise)
+    y_binary <- as.numeric(y_data_categories == category)
+    
+    # Predict probabilities
+    predictions <- predict(category_model, newx = X_data, s = lambda_value, type = "response")
+    predictions <- as.vector(predictions)
+    
+    # Calculate R-squared
+    # R² = 1 - SSres/SStot
+    # SSres = sum((y - ŷ)²)
+    # SStot = sum((y - ȳ)²)
+    y_mean <- mean(y_binary)
+    ss_total <- sum((y_binary - y_mean)^2)
+    ss_residual <- sum((y_binary - predictions)^2)
+    
+    r_squared <- 1 - (ss_residual / ss_total)
+    
+    # Add to results
+    rsquared_results <- rbind(rsquared_results, data.frame(
+      Category = category,
+      R_squared = r_squared
+    ))
+  }
+  
+  return(rsquared_results)
+}
+
+# Calculate R-squared for training data
+# First, ensure we have the training matrix
+X_train <- model.matrix(~ . - price_category - 1, data = train_data)
+y_train_categories <- train_data$price_category
+
+train_rsquared <- calculate_rsquared(elastic_net_models, X_train, y_train_categories, categories)
+print("R-squared values for Training Data:")
+print(train_rsquared)
+
+# Prepare test data for prediction
+# First, check if test_data exists in your environment
+if (exists("test_data")) {
+  # Create the test matrix
+  X_test <- model.matrix(~ . - price_category - 1, data = test_data)
+  y_test_categories <- test_data$price_category
+  
+  # Ensure X_test has the same columns as X_train
+  missing_cols <- setdiff(colnames(X_train), colnames(X_test))
+  if (length(missing_cols) > 0) {
+    # Add missing columns with zeros
+    for (col in missing_cols) {
+      X_test <- cbind(X_test, rep(0, nrow(X_test)))
+      colnames(X_test)[ncol(X_test)] <- col
+    }
+  }
+  
+  # Reorder columns to match X_train
+  X_test <- X_test[, colnames(X_train)]
+  
+  # Calculate test R-squared
+  test_rsquared <- calculate_rsquared(elastic_net_models, X_test, y_test_categories, categories)
+  print("R-squared values for Test Data:")
+  print(test_rsquared)
+} else {
+  print("Test data not found. Make sure test_data is available in your environment.")
+}
+
+# Visualize the R-squared values
+if (require(ggplot2)) {
+  # Combine train and test results
+  if (exists("test_rsquared")) {
+    train_rsquared$Dataset <- "Training"
+    test_rsquared$Dataset <- "Test"
+    all_rsquared <- rbind(train_rsquared, test_rsquared)
+    
+    # Create plot
+    p <- ggplot(all_rsquared, aes(x = Category, y = R_squared, fill = Dataset)) +
+      geom_bar(stat = "identity", position = "dodge") +
+      labs(title = "R-squared for Elastic Net Models",
+           y = "R-squared",
+           x = "Price Category") +
+      theme_minimal() +
+      scale_fill_brewer(palette = "Set1") +
+      ylim(0, 1)
+    
+    print(p)
+  } else {
+    # Only plot training data
+    p <- ggplot(train_rsquared, aes(x = Category, y = R_squared)) +
+      geom_bar(stat = "identity", fill = "steelblue") +
+      labs(title = "R-squared for Elastic Net Models (Training Data)",
+           y = "R-squared",
+           x = "Price Category") +
+      theme_minimal() +
+      ylim(0, 1)
+    
+    print(p)
+  }
+} else {
+  print("ggplot2 package not available. Install it to visualize results.")
+}
+
+# Calculate McFadden's pseudo R-squared (alternative measure for logistic models)
+calculate_mcfadden_rsquared <- function(elastic_models, X_data, y_data_categories, categories) {
+  # Initialize results data frame
+  rsquared_results <- data.frame(
+    Category = character(),
+    McFadden_R2 = numeric(),
+    stringsAsFactors = FALSE
+  )
+  
+  # For each category model
+  for (category in categories) {
+    # Get the model for this category
+    category_model <- elastic_models[[category]]$model
+    lambda_value <- elastic_models[[category]]$lambda
+    
+    # Create binary response for this category (1 if this category, 0 otherwise)
+    y_binary <- as.numeric(y_data_categories == category)
+    
+    # Predict log-likelihoods
+    predictions <- predict(category_model, newx = X_data, s = lambda_value, type = "response")
+    predictions <- as.vector(predictions)
+    
+    # Calculate log-likelihood of the model
+    ll_model <- sum(y_binary * log(predictions + 1e-10) + (1 - y_binary) * log(1 - predictions + 1e-10))
+    
+    # Calculate log-likelihood of null model (intercept only)
+    p_null <- mean(y_binary)
+    ll_null <- sum(y_binary * log(p_null + 1e-10) + (1 - y_binary) * log(1 - p_null + 1e-10))
+    
+    # McFadden's R² = 1 - (ll_model / ll_null)
+    mcfadden_r2 <- 1 - (ll_model / ll_null)
+    
+    # Add to results
+    rsquared_results <- rbind(rsquared_results, data.frame(
+      Category = category,
+      McFadden_R2 = mcfadden_r2
+    ))
+  }
+  
+  return(rsquared_results)
+}
+
+# Calculate McFadden's R-squared
+train_mcfadden <- calculate_mcfadden_rsquared(elastic_net_models, X_train, y_train_categories, categories)
+print("McFadden's Pseudo R-squared values for Training Data:")
+print(train_mcfadden)
+
+if (exists("test_data")) {
+  test_mcfadden <- calculate_mcfadden_rsquared(elastic_net_models, X_test, y_test_categories, categories)
+  print("McFadden's Pseudo R-squared values for Test Data:")
+  print(test_mcfadden)
+}
+```
+
